@@ -17537,6 +17537,7 @@ var DT_MS = 16.666666666666668;
 var SNAP_EVERY = 3;
 var HIST = 32;
 var FOLD = 3;
+var FOLD_NET = 30; // [T151] THE RTT-BUFFER LAW — the input queue IS the latency buffer: a real-internet client (Render hub RTT 100-400ms) holds RTT×60 in-flight inputs (6-24 deep); FOLD=3 DROPPED most of them every RTT window (the server saw a fraction of the movement, the correction blend dragged the client back) while the starved-tick hold re-applied the last input at full tick rate (overshoot forward) — the drop+hold soup the user walked in as "movement doubles on online". 30 = half a second of buffer, far above any legit RTT, far below the flood plane (INPUT_CAP already rate-bounds; the seq guard keeps order) — beyond it a stalled/flooded client gets folded, never a live one.
 var INPUT_CAP = 90;
 var FIRE_CAP = 30;
 var nearPoolR = (room, x, y, z, tol = 0.5) => (room.UNION || []).some((s) => Math.hypot(s.x - x, (s.y || 0) - y, s.z - z) <= tol);
@@ -18797,18 +18798,366 @@ function matchUpdate(room, dt) {
       }
   }
 }
+// ================= [T147] THE BOT-FILL LAW — MP bots were NEVER BUILT (the T146 audit: the hub
+// bundle carries ZERO bot code; the user's "supposed to propagate 10s" was the reconnect-slot
+// grace misread). Now it exists: an empty room is not a lobby. A human joining a room with open
+// slots starts a grace clock (IRON_BOT_DELAY, default the 10s the user quoted); when it expires,
+// the hub fills toward IRON_BOTS TOTAL seats (humans + bots) — bots are REAL room players (the
+// same makePlayer shape, the same stepState physics, the same fire/applyDamage path, real
+// killfeed/scoreboard/corpse legs through the EXISTING wire events), so every client sees them
+// with zero client changes. Bots hold when no match is live, fight only at live, and drop when
+// the last human has been gone 30s (the reconnect-grace window keeps them through a blip).
+// Env: IRON_BOTS (total seats, default 8, 0 = fill OFF) · IRON_BOT_DELAY (ms, default 10000).
+var BOT_FILL = (() => { const n = Number(process.env.IRON_BOTS); return Number.isFinite(n) && n >= 0 ? Math.min(11, Math.floor(n)) : 8; })();
+var BOT_DELAY = (() => { const n = Number(process.env.IRON_BOT_DELAY); return Number.isFinite(n) && n >= 2000 ? Math.floor(n) : 10000; })();
+var BOT_NAMES = ["IVAN", "KOVA", "JINX", "HALE", "RUIN", "VEGA", "ONYX", "PICO", "SABLE", "DRIFT", "NOVA", "ROOK"];
+var BOT_LOADOUTS = ["vanguard", "raider", "hornet", "sabre", "wasp", "ripper"];
+var BOT_SIGHT = 55;   // target-acquisition range (m)
+var BOT_FIRE_MAX = 46; // max engage range (m) — honest falloff band
+var BOT_SPREAD = 0.035; // aim jitter (rad) — beatable at range, lethal in the face
+var BOT_TURN = 0.6;   // max yaw change per 10Hz think (rad) ≈ 6 rad/s — no snap-aim
+var botSeq = 0;
+function humansIn(room) {
+  let n = 0;
+  for (const p of room.players)
+    if (!p.bot && p.joined)
+      n++;
+  return n;
+}
+function botsIn(room) {
+  let n = 0;
+  for (const p of room.players)
+    if (p.bot)
+      n++;
+  return n;
+}
+function botEye(p) {
+  return { x: p.st.pos.x, y: p.st.pos.y + P.eyeHeight + (P.eyeHeight - 0.55 - P.eyeHeight) * p.st.crouch, z: p.st.pos.z }; // the fire handler's own eye formula, verbatim
+}
+function turnToward(a, want, max) {
+  let d = (want - a) % (Math.PI * 2);
+  if (d > Math.PI)
+    d -= Math.PI * 2;
+  else if (d < -Math.PI)
+    d += Math.PI * 2;
+  return a + Math.max(-max, Math.min(max, d));
+}
+function addBot(room) {
+  botSeq++;
+  const team = TEAM_MODES.has(room.match.mode) && room.match.state !== "idle" ? room.match.mode === "ct" ? room.players.size % 3 : room.players.size % 2 : 0; // the join handler's own team law
+  const spawn = pickSpawn(room, team, null);
+  const b = makePlayer("B" + botSeq.toString(36) + Math.random().toString(36).slice(2, 6), "BOT " + BOT_NAMES[botSeq % BOT_NAMES.length], spawn);
+  b.bot = true;
+  b.team = team;
+  b.joinOrder = joinCounter++;
+  b.abId = "dash";
+  b.abCh = 2;
+  b.abChMax = 2;
+  b.wid = BOT_LOADOUTS[botSeq % BOT_LOADOUTS.length];
+  b.wdefs = buildWdefs({ w: b.wid });
+  b.ammo = initAmmo(b);
+  b.fin = "default";
+  b.trl = "none";
+  b.pid = null;
+  b.__chain = null; // a bot owns no socket — roomChain skips it, snapshot/roster read its fields like any player's
+  b.ai = { think: Math.random() * 0.1, in: { ix: 0, iz: 0, sprint: false, jumpEdge: false }, wp: null, wpAt: 0, target: null, reactAt: 0, fireAt: 0, burst: 0, strafe: 0, respawnAt: 0, lastX: b.st.pos.x, lastZ: b.st.pos.z, stuck: 0, wantFire: false };
+  b.joined = true;
+  room.players.add(b);
+  return b;
+}
+function botAudit(room) { // the fill/trim/drop law — on join, on rejoin, on disconnect, once per sim second
+  const humans = humansIn(room);
+  if (humans === 0) {
+    if (!room.botsOutAt)
+      room.botsOutAt = Date.now();
+    else if (Date.now() - room.botsOutAt > 30000) { // 30s > RECONNECT_MS(10s) — a transport blip never dissolves the lobby the player is rejoining
+      let dropped = false;
+      for (const p of [...room.players])
+        if (p.bot) {
+          room.players.delete(p);
+          dropped = true;
+        }
+      room.botsOutAt = 0;
+      room.botsAt = 0;
+      if (dropped) {
+        broadcastRoster(room);
+        console.log(`[room] bot-drop: all bots out of ${room.id} (room empty)`);
+      }
+    }
+    return;
+  }
+  room.botsOutAt = 0;
+  if (!BOT_FILL)
+    return;
+  const want = Math.max(0, Math.min(BOT_FILL, MAX_ROOM - 1) - humans); // one seat always stays open for a joining human
+  const have = botsIn(room);
+  if (have === want) {
+    room.botsAt = 0;
+    return;
+  }
+  if (have < want) {
+    if (!room.botsAt)
+      room.botsAt = Date.now(); // the grace clock — the user's "propagate 10s"
+    if (Date.now() - room.botsAt < BOT_DELAY)
+      return;
+    addBot(room);
+    broadcastRoster(room);
+    console.log(`[room] bot-fill: ${botsIn(room)}/${want} bots in ${room.id} (humans ${humans})`);
+  } else {
+    let over = have - want;
+    for (const p of [...room.players]) {
+      if (over <= 0)
+        break;
+      if (p.bot) {
+        room.players.delete(p);
+        over--;
+      }
+    }
+    room.botsAt = 0;
+    broadcastRoster(room);
+  }
+}
+function botRespawnOk(room) { // the human respawn gate's shape (the snd/gf round law)
+  const m = room.match;
+  if (m.mode === "snd" && m.snd && m.snd.ph !== "inter")
+    return false;
+  if (m.mode === "gf" && m.gf && m.gf.ph !== "inter")
+    return false;
+  return true;
+}
+function doRespawn(room, p, pos) { // [T147] the respawn body EXTRACTED from the socket handler — one law for humans and bots
+  p.st = makeState(pos || pickSpawn(room, p.team, p));
+  p.hp = H.maxHP;
+  p.shield = 0;
+  p.alive = true;
+  p.spawnProt = H.spawnProtTime;
+  p.lastDmgT = Date.now();
+  p.hist.length = 0;
+  p.q.length = 0;
+  p.lastIn = null;
+  if (p.wdefs && p.wdefs.size) {
+    p.ammo = initAmmo(p);
+    if (p.__chain)
+      for (const [wid, def] of p.wdefs)
+        p.__chain("ammo", { w: wid, mag: def.mag, res: def.reserve });
+  }
+}
+function botThink(room, b, live, now) { // 10Hz — target select, steering, fire intent
+  const inq = b.ai.in;
+  let best = null, bestD = 1e9;
+  for (const q of room.players) {
+    if (q === b || !q.joined || !q.alive)
+      continue;
+    if (TEAM_MODES.has(room.match.mode) && q.team === b.team)
+      continue;
+    const d = Math.hypot(q.st.pos.x - b.st.pos.x, q.st.pos.z - b.st.pos.z);
+    if (d > BOT_SIGHT || d >= bestD)
+      continue;
+    if (segmentBlockedSrv(room.WORLD.colliders, botEye(b), botEye(q)))
+      continue;
+    best = q;
+    bestD = d;
+  }
+  if (best && best !== b.ai.target)
+    b.ai.reactAt = now + 380 + Math.random() * 320; // first-sight reaction — a bot never snaps on contact
+  b.ai.target = best;
+  if (best) {
+    const want = Math.atan2(-(best.st.pos.x - b.st.pos.x), -(best.st.pos.z - b.st.pos.z)); // the makeState facing law
+    b.st.yaw = turnToward(b.st.yaw, want, BOT_TURN);
+    const fx = -Math.sin(b.st.yaw), fz = -Math.cos(b.st.yaw), rx = -fz, rz = fx; // physics.js:390 verbatim
+    const dx = best.st.pos.x - b.st.pos.x, dz = best.st.pos.z - b.st.pos.z;
+    if (bestD > 16) {
+      inq.ix = Math.max(-1, Math.min(1, dx * rx + dz * rz));
+      inq.iz = Math.max(-1, Math.min(1, dx * fx + dz * fz));
+      inq.sprint = bestD > 26;
+    } else {
+      b.ai.strafe++;
+      inq.ix = b.ai.strafe % 8 < 4 ? 0.8 : -0.8; // close-in jiggle — a strafing target, not a posting dummy
+      inq.iz = 0.15;
+      inq.sprint = false;
+    }
+  } else {
+    if (!b.ai.wp || now > b.ai.wpAt || Math.hypot(b.ai.wp.x - b.st.pos.x, b.ai.wp.z - b.st.pos.z) < 2.2) {
+      const pool = spawnPool(room, b.team);
+      b.ai.wp = pool[Math.floor(Math.random() * pool.length)];
+      b.ai.wpAt = now + 9000;
+    }
+    const want = Math.atan2(-(b.ai.wp.x - b.st.pos.x), -(b.ai.wp.z - b.st.pos.z));
+    b.st.yaw = turnToward(b.st.yaw, want, BOT_TURN);
+    const fx = -Math.sin(b.st.yaw), fz = -Math.cos(b.st.yaw), rx = -fz, rz = fx; // physics.js:390 verbatim
+    const dx = b.ai.wp.x - b.st.pos.x, dz = b.ai.wp.z - b.st.pos.z;
+    inq.ix = Math.max(-1, Math.min(1, dx * rx + dz * rz));
+    inq.iz = Math.max(-1, Math.min(1, dx * fx + dz * fz));
+    inq.sprint = true;
+  }
+  b.ai.wantFire = !!(best && live && bestD <= BOT_FIRE_MAX && now >= b.ai.reactAt && !segmentBlockedSrv(room.WORLD.colliders, botEye(b), botEye(best)));
+}
+function botFire(room, b, now) { // the human fire handler's shape — wall ray, box hitboxes, falloff, ammo+reload, the fired-reveal broadcast
+  if (!b.ai.wantFire)
+    return;
+  const wdef = b.wdefs && b.wdefs.get(b.wid);
+  if (!wdef)
+    return;
+  if (!b.ammo)
+    b.ammo = initAmmo(b);
+  let am = b.ammo.get(b.wid);
+  if (!am) {
+    am = { mag: wdef.mag, res: wdef.reserve, rl: 0 };
+    b.ammo.set(b.wid, am);
+  }
+  if (am.mag <= 0) {
+    if (!am.rl)
+      am.rl = now + Math.round((wdef.reloadT || 2) * 1000);
+    if (now < am.rl)
+      return;
+    am.mag = wdef.mag;
+    am.res = Math.max(0, am.res - wdef.mag);
+    if (am.res <= 0)
+      am.res = wdef.reserve; // bots carry honest mags but never run dry — ammo poverty is not the fill's feature
+    am.rl = 0;
+  }
+  const t = b.ai.target;
+  if (!t || !t.alive) {
+    b.ai.wantFire = false;
+    return;
+  }
+  const eye = botEye(b), te = botEye(t);
+  let dx = te.x - eye.x, dy = te.y - eye.y, dz = te.z - eye.z;
+  const dl = Math.hypot(dx, dy, dz) || 1;
+  dx = dx / dl + (Math.random() - 0.5) * BOT_SPREAD;
+  dy = dy / dl + (Math.random() - 0.5) * BOT_SPREAD;
+  dz = dz / dl + (Math.random() - 0.5) * BOT_SPREAD;
+  const dl2 = Math.hypot(dx, dy, dz) || 1;
+  const o = { x: eye.x, y: eye.y, z: eye.z }, d = { x: dx / dl2, y: dy / dl2, z: dz / dl2 };
+  let bestT = rayWorld(room.WORLD.colliders, o, d, 300);
+  let victim = null, hitHead = false, hitPoint = null;
+  for (const q of room.players) { // present-tick hitboxes — a bot shoots NOW (no client rewind to honor)
+    if (q === b || !q.joined || !q.alive)
+      continue;
+    if (TEAM_MODES.has(room.match.mode) && q.team === b.team)
+      continue;
+    const h = heightOf(q.st.crouch);
+    const center = { x: q.st.pos.x, y: q.st.pos.y + h * 0.5, z: q.st.pos.z };
+    const headC = { x: center.x, y: center.y + h * 0.3, z: center.z };
+    const tHead = rayBox(o, d, headC.x - HEAD_HS, headC.y - HEAD_HS, headC.z - HEAD_HS, headC.x + HEAD_HS, headC.y + HEAD_HS, headC.z + HEAD_HS);
+    const tBody = rayBox(o, d, center.x - BODY_BW, center.y - h * 0.5, center.z - BODY_BW, center.x + BODY_BW, center.y + h * 0.45, center.z + BODY_BW);
+    let tHit = -1, head = false;
+    if (tHead >= 0 && (tBody < 0 || tHead <= tBody)) {
+      tHit = tHead;
+      head = true;
+    } else if (tBody >= 0)
+      tHit = tBody;
+    if (tHit >= 0 && tHit < bestT) {
+      bestT = tHit;
+      victim = q;
+      hitHead = head;
+      hitPoint = { x: o.x + d.x * tHit, y: o.y + d.y * tHit, z: o.z + d.z * tHit };
+    }
+  }
+  am.mag--;
+  if (!wdef.suppressed)
+    for (const q of room.players)
+      if (q.joined && q !== b && q.__chain)
+        q.__chain("fired", { id: b.id }); // the minimap-reveal parity (the mp.js 'fired' mirror)
+  if (victim && hitPoint) {
+    const [near, far, minM] = wdef.falloff;
+    let mult = 1;
+    if (bestT > near)
+      mult = 1 + (minM - 1) * Math.min(1, (bestT - near) / Math.max(0.1, far - near));
+    const dmg = wdef.dmg * (hitHead ? wdef.hs : 1) * mult;
+    applyDamage(room, victim, dmg, b, hitHead, wdef.name, hitPoint);
+  }
+  const interval = Math.max(60, Math.round(60000 / (wdef.rpm || 600)));
+  b.ai.burst = b.ai.burst > 0 ? b.ai.burst - 1 : 2 + Math.floor(Math.random() * 4);
+  b.ai.fireAt = now + (b.ai.burst > 0 ? interval : interval + 420 + Math.floor(Math.random() * 520)); // the human breath — bursts, then a pause
+}
+function stepBots(room, dt) { // the 60Hz driver — decisions at 10Hz, the SAME input wire shape humans emit
+  if (botsIn(room) === 0)
+    return;
+  const live = room.match.state === "live";
+  const now = Date.now();
+  for (const b of room.players) {
+    if (!b.bot || !b.joined)
+      continue;
+    if (!b.alive) {
+      if (!b.ai.respawnAt)
+        b.ai.respawnAt = now + 2600;
+      else if (now >= b.ai.respawnAt && (live || room.match.state === "idle") && botRespawnOk(room))
+        doRespawn(room, b, pickSpawn(room, b.team, b)), b.ai.respawnAt = 0;
+      continue;
+    }
+    b.ai.think -= dt;
+    if (b.ai.think <= 0) {
+      b.ai.think = 0.1;
+      botThink(room, b, live, now);
+    }
+    const inq = b.ai.in;
+    b.seq++;
+    b.q.push({ seq: b.seq, ix: inq.ix, iz: inq.iz, yaw: b.st.yaw, pitch: b.st.pitch, sprint: !!inq.sprint, ads: false, crouch: false, crouchEdge: false, jumpEdge: !!inq.jumpEdge, autoSprint: false });
+    inq.jumpEdge = false;
+    if (b.q.length > FOLD)
+      b.q.shift();
+    if (live && now >= b.ai.fireAt)
+      botFire(room, b, now);
+    const moved = Math.hypot(b.st.pos.x - b.ai.lastX, b.st.pos.z - b.ai.lastZ);
+    if ((inq.ix || inq.iz) && moved < 0.012)
+      b.ai.stuck += dt;
+    else
+      b.ai.stuck = 0;
+    b.ai.lastX = b.st.pos.x;
+    b.ai.lastZ = b.st.pos.z;
+    if (b.ai.stuck > 0.7) { // wall/corner watch — hop once and pick a fresh waypoint
+      inq.jumpEdge = true;
+      b.ai.wp = null;
+      b.ai.stuck = 0;
+    }
+  }
+}
+setInterval(() => { // [T147] THE EMPTY-ROOM GC — getRoom() only ever ADDED rooms (the T146 metrics leak: rooms:3 at players:0)
+  const now = Date.now();
+  for (const [id, r] of rooms) {
+    if (r.players.size > 0 || (r.specs && r.specs.size > 0)) {
+      r.gcAt = 0;
+      continue;
+    }
+    if (r.match.state === "live" || r.match.state === "countdown") {
+      r.match.state = "idle";
+      r.match.tLeft = 0;
+    }
+    if (!r.gcAt)
+      r.gcAt = now;
+    else if (now - r.gcAt > 120000) {
+      rooms.delete(id);
+      console.log(`[room] gc: ${id} empty >2min`);
+    }
+  }
+}, 30000).unref();
 function stepRoom(room, dt) {
   room.tick++;
   matchUpdate(room, dt);
+  if (room.tick % 60 === 0)
+    botAudit(room); // [T147] the once-per-second fill/trim/drop sweep
+  stepBots(room, dt); // [T147] bot inputs ride the SAME stepState path the humans consume below
   const now = Date.now();
   for (const p of room.players) {
     if (!p.joined)
       continue;
     let inp;
     if (p.q.length === 0) {
-      inp = p.lastIn ? { ...p.lastIn, jumpEdge: false, crouchEdge: false } : null;
+      // [T151] THE INPUT-TRUTH LAW — a starved tick applies NO input (the body coasts through
+      // stepState's zero-input friction). The old hold re-applied p.lastIn EVERY starved tick,
+      // which converted any client input-rate deficit (frame dips > the 50ms dt cap, background
+      // throttle, the headless/low-end class) into server-side EXTRA movement: the server body
+      // outran the prediction by (ticks - inputs)/inputs and the §8 correction blend dragged the
+      // client along — measured 2× walk speed on the repro rig, ZERO while standing (ix=iz=0
+      // holds apply nothing) — exactly the user's "something doubles with the movement, only when
+      // I walk, only online". Each REAL input now applies EXACTLY ONCE on both sides (the client
+      // replays the same unacked seqs), so prediction and server agree over ANY window and the
+      // drift collapses to the latency constant. Bots are untouched: stepBots feeds one input per
+      // tick BEFORE this loop, so a bot queue never starves and never reads this branch.
+      inp = null;
     } else {
-      while (p.q.length > FOLD)
+      while (p.q.length > (p.bot ? FOLD : FOLD_NET)) // [T151] humans buffer at FOLD_NET (the RTT law above); bots keep the tight FOLD (their feed is steady 60Hz)
         p.q.shift();
       inp = p.q.shift();
       p.lastAppliedSeq = inp.seq;
@@ -19288,9 +19637,10 @@ httpServer.on("request", (req, res) => {
       pn += r.players.size + (r.specs ? r.specs.size : 0);
     const L = [
       "ironsight_room 1",
-      "version v2.9.31",
+      "version v2.9.36-t151",
       "uptime_s " + Math.round(process.uptime()),
       "players " + pn,
+      "bots " + [...rooms.values()].reduce((a, r) => a + botsIn(r), 0),
       "rooms " + rooms.size,
       "joins_total " + SWEEP_METRICS.joins,
       "joins_flood_rejected " + SWEEP_METRICS.joinsFlood,
@@ -19382,6 +19732,7 @@ io2.on("connection", (socket) => {
         chain("joined", { id: p.id, roomSize: room2.players.size, spawn: { x: p.st.pos.x, y: p.st.pos.y, z: p.st.pos.z }, token: p.token, room: room2.id, code: room2.priv ? room2.code : undefined, restored: true, ...p.pid ? { profile: profileOf(p.pid), ranked: rankedView(CAREER.players[p.pid]) } : {} });
         broadcastRoster(room2);
         console.log(`[room] rejoin: ${p.name} -> ${room2.id} (${room2.players.size})`);
+        botAudit(room2); // [T147] the rejoin is a human arrival — the fill/trim law reads it
         kickClock();
         return;
       }
@@ -19466,6 +19817,7 @@ io2.on("connection", (socket) => {
       chain("joined", { id: p.id, roomSize: room.players.size, live: room.match.state === "live" || room.match.state === "countdown", spawn: { x: +spawn.x.toFixed(3), y: 0.05, z: +spawn.z.toFixed(3) }, token: p.token, room: room.id, code: room.priv ? room.code : undefined, ...p.pid ? { profile: profileOf(p.pid), ranked: rankedView(CAREER.players[p.pid]) } : {} });
       broadcastRoster(room);
       console.log(`[room] join: ${p.name} -> ${room.id} (${room.players.size}) ab=${p.abId}`);
+      botAudit(room); // [T147] the human arrival arms the bot-fill grace clock
       kickClock();
     } catch (e) {
       console.error("[room] join error", e);
@@ -19639,20 +19991,7 @@ io2.on("connection", (socket) => {
     }
     if (!pos)
       pos = pickSpawn(room, p.team, p);
-    p.st = makeState(pos);
-    p.hp = H.maxHP;
-    p.shield = 0;
-    p.alive = true;
-    p.spawnProt = H.spawnProtTime;
-    p.lastDmgT = Date.now();
-    p.hist.length = 0;
-    p.q.length = 0;
-    p.lastIn = null;
-    if (p.wdefs && p.wdefs.size) {
-      p.ammo = initAmmo(p);
-      for (const [wid, def] of p.wdefs)
-        chain("ammo", { w: wid, mag: def.mag, res: def.reserve });
-    }
+    doRespawn(room, p, pos); // [T147] the shared respawn body — the bots respawn through the SAME law
   });
   socket.on("reload", (m) => {
     if (!p || !p.joined)
@@ -20858,6 +21197,8 @@ io2.on("connection", (socket) => {
     p.__chain = null;
     if (room)
       broadcastRoster(room);
+    if (room)
+      botAudit(room); // [T147] the departure read — botsOutAt grace, never an instant dissolve
     if (p.token && !rl.vio.kicked) {
       const purgeTimer = setTimeout(() => {
         held.delete(p.token);
@@ -20878,7 +21219,7 @@ io2.on("connection", (socket) => {
   socket.on("error", (e) => console.error(`[room] socket error (${socket.id}):`, e));
 });
 httpServer.listen(PORT, () => {
-  console.log(`[room] ironsight-room (authoritative, MP-3.1 residuals) running on port ${PORT} (path '/' | sim 60Hz self-correcting | snap 1/${SNAP_EVERY} | fold ${FOLD} | rewind ring ${HIST} | rooms+modes | nades+flash+streaks+abilities+srtt+host | fired-reveal | spectate \xA725 | private-lobbies \xA729 | ac \xA750 sustained+sanctions+origin | per-room worlds \xA751 | knobs \xA752 | accounts+eco+social+queue \xA753 | [T140] voice relay + custom-map MP + join flood/PoW + /metrics)`);
+  console.log(`[room] ironsight-room (authoritative, MP-3.1 residuals) running on port ${PORT} (path '/' | sim 60Hz self-correcting | snap 1/${SNAP_EVERY} | fold ${FOLD}/net ${FOLD_NET} | [T151] input-truth: starved tick = coast, no lastIn re-apply | rewind ring ${HIST} | rooms+modes | nades+flash+streaks+abilities+srtt+host | fired-reveal | spectate \xA725 | private-lobbies \xA729 | ac \xA750 sustained+sanctions+origin | per-room worlds \xA751 | knobs \xA752 | accounts+eco+social+queue \xA753 | [T140] voice relay + custom-map MP + join flood/PoW + /metrics | [T147] bot-fill ${BOT_FILL} seats / ${BOT_DELAY}ms grace (IRON_BOTS · IRON_BOT_DELAY) + empty-room GC)`);
 });
 var ironFlush = () => {
   try {
