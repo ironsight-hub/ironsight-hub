@@ -1,0 +1,12 @@
+{
+  "name": "ironsight-room",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "socket.io": "^4.8.4"
+  },
+  "scripts": {
+    "dev": "bun index.ts"
+  }
+}
