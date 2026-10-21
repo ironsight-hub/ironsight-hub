@@ -104,6 +104,20 @@ try {
   if (raw && typeof raw === 'object' && raw.v === 1 && raw.users) ACC = raw
   else console.log('[acc] malformed file — starting fresh')
 } catch (e) { console.log('[acc] fresh store (no file yet)') }
+
+// [T166] THE FIRST-PILOT SEED — the CoD boot-account law: the game OPENS on an account
+// face, so pilot #1 must exist with zero friction. If the account table is EMPTY (fresh
+// deploy / ephemeral Render disk), seed ADMIN + the user's own password. It's CODE, not
+// state — survives every redeploy; the clean-ship law (accounts.json ships empty) stands.
+if (!Object.keys(ACC.users).length) {
+  const ph = await Bun.password.hash('IronsightIRONSIGHT', { algorithm: 'argon2id' })
+  const pid = crypto.randomUUID()
+  const disc = assignDisc()
+  ACC.users['admin'] = { name: 'ADMIN', pid, ph, made: Date.now(), disc }
+  const rec = careerRec(pid, 'ADMIN'); rec.n = 'ADMIN'; rec.disc = disc
+  CAREER_DIRTY = true; accPersist(); careerPersist()
+  console.log('[T166] first pilot seeded: ADMIN#' + disc)
+}
 function accPersist() {
   try {
     const tmp = ACC_PATH + '.tmp'
@@ -128,6 +142,25 @@ function socialPersist() {
 const SESSIONS = new Map() // tok -> { pid, name, exp } (sliding TTL; restart = re-login)
 const SESSION_TTL = 30 * 86400e3
 function newTok() { const b = new Uint8Array(32); crypto.getRandomValues(b); return [...b].map(x => x.toString(16).padStart(2, '0')).join('') }
+
+// [T166] THE PILOT DISCRIMINATOR — the CoD Activision-ID mechanic (researched:
+// support.activision.com — DisplayName#1234567, the number disambiguates colliding
+// display names and IS the friend-add handle). 4-digit, unique across accounts;
+// stamped on the account record (auth truth) + the career record (the public index
+// pidByName/socialState read). Bare-name adds still resolve (unique names by
+// construction — ACC keyed by lowercase name); the full ID always resolves.
+function assignDisc(): string {
+  for (let i = 0; i < 64; i++) {
+    const d = String(1000 + Math.floor(Math.random() * 9000))
+    if (!Object.values(ACC.users).some((a: any) => a.disc === d)) return d
+  }
+  return String(1000 + (Date.now() % 9000)) // keeps the shape total; collision odds ~0
+}
+
+// [T166] THE BIG-MAP POOL — the largest roster stages (60×44 half-extents, the 2.6k-tile
+// tier; area-ranked over all 35 map JSONs). The client's BIG MAP accordion queues with
+// big:true and the hub boots that bucket's world from here (see the q handler).
+const BIG_MAP_POOL = ['yard', 'windfarm', 'temple', 'stadium', 'solar']
 // §53.1: one-time device-career merge — a login absorbs the device pid's career record
 function mergeCareer(dst, src) {
   dst.k += src.k || 0; dst.d += src.d || 0; dst.m += src.m || 0; dst.w += src.w || 0
@@ -214,7 +247,7 @@ function presenceOf(pid) { // presence = live room membership
 }
 function socialState(pid) {
   return {
-    friends: (SOCIAL.friends[pid] || []).map((f) => ({ pid: f.pid, since: f.since, n: (CAREER.players[f.pid] || {}).n || f.n || 'PILOT', ...presenceOf(f.pid) })),
+    friends: (SOCIAL.friends[pid] || []).map((f) => ({ pid: f.pid, since: f.since, n: (CAREER.players[f.pid] || {}).n || f.n || 'PILOT', disc: (CAREER.players[f.pid] || {}).disc || null, ...presenceOf(f.pid) })), // [T166] the ID rides the friends list
     reqsIn: (SOCIAL.reqs[pid] || []).map((o) => ({ from: o.from, n: (CAREER.players[o.from] || {}).n || 'PILOT' })),
     memberOf: SOCIAL.memberOf[pid] || null,
     clan: SOCIAL.memberOf[pid] ? clanView(SOCIAL.clans[SOCIAL.memberOf[pid]]) : null,
@@ -239,10 +272,11 @@ function rebroadcastRoomsFor(pid) { // live-caught defect S4c fix: clan changes 
 const QUEUE = [] // { op, pid, name, ti, mode, t0, chain }
 let rkCounter = 0
 function tierIdx(rp) { let i = 0; for (let k = 0; k < RP_TIERS.length; k++) if (rp >= RP_TIERS[k].min) i = k; return i }
-function bestLobbyOf() {
+function bestLobbyOf(wantBig = false) { // [T166] the big flag filters BOTH directions — a regular queue never lands in a big world and vice versa
   let best = null
   for (const r of rooms.values()) {
     if (r.priv) continue
+    if (!!r.big !== wantBig) continue
     if (r.match.state === 'idle') if (r.players.size < MAX_ROOM) if (!best || r.players.size > best.players.size) best = r // fullest idle public lobby
   }
   return best
@@ -275,7 +309,7 @@ const MAP = JSON.parse(await Bun.file(MAP_PATH).text()) // boot map seed (IRON_M
 // carries its own WORLD/POOLS/UNION/flags/HILLS/SITES built from the disk registry (32 maps),
 // so a private room can pick ANY roster map (the MP outpost-pin residual is closed).
 const MAPS_DIR = GAME_JS.replace(/\/js$/, '') + '/maps'
-const MAPS_REGISTRY = readdirSync(MAPS_DIR) // disk truth — every .json is a pickable map id
+const MAPS_REGISTRY = readdirSync(MAPS_DIR).filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, '')) // disk truth — the pickable map IDs (extension-stripped; the raw-readdir form made every id lookup miss — caught live by the T166 big-pool E2E, same latent flaw rode setMap)
 const BOOT_MAP_ID = (typeof MAP.id === 'string' && MAP.id) || 'outpost'
 function loadMapData(id) {
   if (!MAPS_REGISTRY.includes(id)) return null
@@ -1895,15 +1929,15 @@ io.on('connection', (socket) => {
       if (op === 'register') {
         if (ACC.users[name.toLowerCase()]) return fail('taken')
         const ph = await Bun.password.hash(pass, { algorithm: 'argon2id' }) // OWASP greenfield law
-        const acc = { name, pid: devPid, ph, made: Date.now() }
+        const acc = { name, pid: devPid, ph, made: Date.now(), disc: assignDisc() } // [T166] the pilot discriminator rides registration
         ACC.users[name.toLowerCase()] = acc
         // live-caught defect R1 fix: register STAMPS the account name into the career
         // record (pidByName + friends/trades resolve by name — without the stamp they
         // bind to a stale name and by-name flows break for accounts)
-        const rec = careerRec(devPid, name); rec.n = name
+        const rec = careerRec(devPid, name); rec.n = name; rec.disc = acc.disc // [T166] the public index carries the ID
         CAREER_DIRTY = true; accPersist(); careerPersist()
-        const tok = newTok(); SESSIONS.set(tok, { pid: acc.pid, name: acc.name, exp: Date.now() + SESSION_TTL })
-        chain('auth', { op, name: acc.name, tok, pid: acc.pid })
+        const tok = newTok(); SESSIONS.set(tok, { pid: acc.pid, name: acc.name, exp: Date.now() + SESSION_TTL, disc: acc.disc })
+        chain('auth', { op, name: acc.name, tok, pid: acc.pid, disc: acc.disc })
         return
       }
       // login
@@ -1918,10 +1952,11 @@ io.on('connection', (socket) => {
         delete CAREER.players[devPid]
         CAREER_DIRTY = true
       }
-      const rec = careerRec(acc.pid, acc.name); rec.n = acc.name // R1 fix: name-stamp on login too
+      if (!acc.disc) { acc.disc = assignDisc(); accPersist() } // [T166] pre-T166 account migration — the ID assigns on first login
+      const rec = careerRec(acc.pid, acc.name); rec.n = acc.name; rec.disc = acc.disc // R1 fix: name-stamp on login too · [T166] the ID stamp
       CAREER_DIRTY = true; careerPersist()
-      const tok = newTok(); SESSIONS.set(tok, { pid: acc.pid, name: acc.name, exp: Date.now() + SESSION_TTL })
-      chain('auth', { op, name: acc.name, tok, pid: acc.pid })
+      const tok = newTok(); SESSIONS.set(tok, { pid: acc.pid, name: acc.name, exp: Date.now() + SESSION_TTL, disc: acc.disc })
+      chain('auth', { op, name: acc.name, tok, pid: acc.pid, disc: acc.disc })
       return
     }
     if (op === 'logout') {
@@ -1935,7 +1970,7 @@ io.on('connection', (socket) => {
       const s = acc
       s.exp = Date.now() + SESSION_TTL // sliding TTL (stays-signed-in law [j_02])
       const rec = CAREER.players[acc.pid]
-      chain('auth', { op, name: acc.name, tok: d.tok, pid: acc.pid, profile: profileOf(acc.pid), ranked: rankedView(rec), eco: ecoState(acc.pid), social: socialState(acc.pid) })
+      chain('auth', { op, name: acc.name, tok: d.tok, pid: acc.pid, disc: acc.disc, profile: profileOf(acc.pid), ranked: rankedView(rec), eco: ecoState(acc.pid), social: socialState(acc.pid) }) // [T166] the ID rides the resume ack
       return
     }
     fail('op')
@@ -2293,7 +2328,19 @@ io.on('connection', (socket) => {
     SOCIAL.reqs[pid] = SOCIAL.reqs[pid] || []
     if (op === 'state') { chain('soc', { op, ...socialState(pid) }); return }
     if (op === 'friendReq') {
-      const to = pidByName(d.name)
+      // [T166] the CoD-ID resolve: 'NAME#1234' (the full Activision-style ID) splits at the
+      // LAST '#' — name + discriminator must BOTH match an account. Bare names keep the
+      // §53.3 exact-name resolve (names are unique by construction). A wrong disc fails
+      // 'to' exactly like an unknown name — no enumeration tell.
+      const raw = typeof d.name === 'string' ? d.name.trim() : ''
+      let to: string | null = null
+      const hash = raw.lastIndexOf('#')
+      if (hash > 0) {
+        const acc = ACC.users[raw.slice(0, hash).toLowerCase()]
+        if (acc && acc.disc === raw.slice(hash + 1)) to = acc.pid
+      } else {
+        to = pidByName(raw)
+      }
       if (!to || to === pid) return fail('to')
       SOCIAL.reqs[to] = SOCIAL.reqs[to] || []
       if (SOCIAL.reqs[to].length >= 20) return fail('cap')
@@ -2468,12 +2515,14 @@ io.on('connection', (socket) => {
     const mode = typeof d.mode === 'string' && CFG.MODES[d.mode] ? d.mode : 'ffa'
     for (let i = QUEUE.length - 1; i >= 0; i--) if (QUEUE[i].chain === chain) QUEUE.splice(i, 1) // re-queue = move
     if (op === 'quick') {
-      const bestLobby = bestLobbyOf() // fullest idle public lobby preferred
+      const wantBig = d.big === true // [T166] the BIG MAP accordion's queue pref — big/big-only lobby matching
+      const bestLobby = bestLobbyOf(wantBig) // fullest idle public lobby preferred — the flag filters (the [T166] law above)
       let best = null
-      for (const r of rooms.values()) if (!r.priv && r.match.state === 'idle' && r.players.size < MAX_ROOM) if (!best || r.players.size > best.players.size) best = r
-      const room = bestLobby || best || getRoom('Q' + (++rkCounter)) // open bucketing: join OR create
+      for (const r of rooms.values()) if (!r.priv && r.match.state === 'idle' && r.players.size < MAX_ROOM && !!r.big === wantBig) if (!best || r.players.size > best.players.size) best = r // [T166] the flag filters BOTH directions
+      const room = bestLobby || best || getRoom((wantBig ? 'B' : 'Q') + (++rkCounter)) // open bucketing: join OR create — big queuers get their own B-bucket
+      if (wantBig && !room.big) { room.big = true; buildRoomWorld(room, BIG_MAP_POOL[Math.floor(Math.random() * BIG_MAP_POOL.length)]) } // [T166] fresh big bucket → the world REBUILDS from the pool (the setMap §51.2 rebuild idiom)
       if (room.match.state === 'idle') room.match.mode = mode
-      chain('queue', { op, room: room.id, mode })
+      chain('queue', { op, room: room.id, mode, big: wantBig })
       return
     }
     if (!RANKED_MODES.includes(mode)) { chain('queue', { op, err: 'mode' }); return } // [T157] the ranked queue is RANKED-MODES-ONLY server truth (§30.1: ffa/gg/practice OUT) — the old handler accepted any CFG.MODES key, so a ranked ffa queue was a silent no-op bucket; the client picker gates, this is the backstop
