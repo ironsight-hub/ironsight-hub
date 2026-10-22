@@ -71,6 +71,12 @@ export const OPERATORS = [
   // existing ghost/aegis (identity tier, no power creep).
   { id: 'vanta',   name: 'VANTA',        role: 'PHANTOM',     ability: 'ghost',    r: 'mythic',    price: -1, tk: 6500, side: 'nullstate' },
   { id: 'aurum',   name: 'AURUM',        role: 'WARDEN',      ability: 'aegis',    r: 'mythic',    price: -1, tk: 6500, side: 'pact' },
+  // [T155 R31] the 3-widening wave: 10→13 rows. The vanta/aurum law verbatim: kits REUSE
+  // the existing ability set (identity tier, no power creep); prices walk the shipped
+  // rarity ladder; bios ride op.bio.<id> ×9 (the roster single-truth law).
+  { id: 'dusk',    name: 'DUSK',         role: 'RECON',       ability: 'pulse',    r: 'uncommon',  price: 1500, side: 'nullstate' },
+  { id: 'forge',   name: 'FORGE',        role: 'LOGISTICS',   ability: 'resupply', r: 'rare',      price: 3000, side: 'pact' },
+  { id: 'onyx',    name: 'ONYX',         role: 'DISRUPTOR',   ability: 'surge',    r: 'epic',      price: 8000, side: 'nullstate' },
 ];
 
 // [T108] ownership = the §53.2 ∪ law shape (server inventory ∪ claimed ∪

@@ -36,9 +36,10 @@ export const BINDINGS = {
   slot3:         { label: 'Weapon Slot 3', keys: ['Digit3'], fixed: true }, // pre-existing: no consumer in main.js (probe_t38 logs it) — bound for default-map fidelity, not rebindable
   inspect:       { label: 'Inspect Weapon', keys: ['KeyF'] },
   ping:          { label: 'Ping World', keys: ['KeyZ', 'Mouse1'] },
+  trainer:       { label: 'Trainer (open/close)', keys: ['Digit7'] }, // [T168] the FPS trainer panel — takes 7 (the user directive). BINDINGS ORDER MATTERS: actionForCode returns the FIRST action bound to a code, so this entry MUST sit above streak2; Supply Drop moves to Digit8 (the mergeBinds migration below carries old saves over)
   streak0:       { label: 'Streak: UAV', keys: ['Digit5'] },
   streak1:       { label: 'Streak: Airstrike', keys: ['Digit6'] },
-  streak2:       { label: 'Streak: Supply Drop', keys: ['Digit7'] },
+  streak2:       { label: 'Streak: Supply Drop', keys: ['Digit8'] }, // [T168] was Digit7 — ceded to the trainer bind above
   p_add:         { label: 'Range: Add Bot', keys: ['KeyP'] },
   p_rem:         { label: 'Range: Remove Bot', keys: ['KeyO'] },
   p_diff:        { label: 'Range: Difficulty', keys: ['KeyK'] },
@@ -93,6 +94,11 @@ export function mergeBinds(saved) { // saved partial/garbage → per-action defa
     out[a] = (Array.isArray(v) && v.length && v.every(isCode))
       ? v.slice() : DEFAULT_BINDS[a].slice();
   }
+  // [T168] the 7-cease migration: a pre-T168 save carries streak2=['Digit7']; with the
+  // trainer now owning 7 (and resolving FIRST by BINDINGS order), that save's supply
+  // drop would be dead — carry it to Digit8. If the user rebound the trainer elsewhere,
+  // their saved streak2 keeps 7 untouched (the trainer no longer claims the code).
+  if (out.trainer && out.trainer.includes('Digit7') && out.streak2 && out.streak2.includes('Digit7')) out.streak2 = ['Digit8'];
   return out;
 }
 export function tryAssignBind(binds, action, code) { // conflict resolver used by the UI + probes

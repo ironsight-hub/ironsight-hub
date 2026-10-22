@@ -2,7 +2,7 @@
 // IRONSIGHT — ui.js : menus, settings, loadout, persistence
 // GSAP microinteractions + menu parallax [aesthetic brief]
 // ============================================================
-import { CFG, WEAPONS, ABILITIES, ATTACHMENTS, DEFAULT_SETTINGS, DEFAULT_LOADOUT, SETTINGS_LS_KEY, PAD_BINDS, MP_REGIONS, xpForLevel, RANKED_MODES, RP_TIERS, tierOf, applyColorVision, dailyFor, ECO_PRICE, ECO_CLAIM, ECO_EARN, BP, bpOf, RANK_REWARDS, isoWeekOf, seasonOf, MAX_LVL, PRESTIGE, CLAN } from './config.js'; // T89 L6: RANK_REWARDS + isoWeekOf + seasonOf join the single truth · [T119 S-1] ECO_CLAIM joins — the free-claim gates render on the offline shop face · [G-9] MAX_LVL/PRESTIGE join — the prestige gate + reward are the config's own law · [T127 G-7] CLAN joins — the warNote faces read the CLAN.war point law (the single truth, never duplicated) · [T136] ECO_EARN joins — the affordability gate states the earn path (never a dead disabled card)
+import { CFG, WEAPONS, ABILITIES, ATTACHMENTS, SIGNATURE, DEFAULT_SETTINGS, DEFAULT_LOADOUT, SETTINGS_LS_KEY, PAD_BINDS, MP_REGIONS, xpForLevel, RANKED_MODES, RP_TIERS, tierOf, applyColorVision, dailyFor, ECO_PRICE, ECO_CLAIM, ECO_EARN, ECO_DUPE_REFUND, BP, bpOf, RANK_REWARDS, isoWeekOf, seasonOf, MAX_LVL, PRESTIGE, PRESTIGE_CLASSIC, RANKED_PLACEMENTS, CLAN } from './config.js'; // [T161] RANKED_PLACEMENTS + PRESTIGE_CLASSIC join — the placements face + the dual-path prestige arm // T89 L6: RANK_REWARDS + isoWeekOf + seasonOf join the single truth · [T119 S-1] ECO_CLAIM joins — the free-claim gates render on the offline shop face · [G-9] MAX_LVL/PRESTIGE join — the prestige gate + reward are the config's own law · [T127 G-7] CLAN joins — the warNote faces read the CLAN.war point law (the single truth, never duplicated) · [T136] ECO_EARN joins — the affordability gate states the earn path (never a dead disabled card) · [T152 E3] SIGNATURE joins — the per-weapon gunsmith catalogs
 import * as metagame from './metagame.js'; // T89 L4: challenges/events deterministic single truth (feed/claim laws)
 import * as onboard from './onboard.js'; // T89 L10: 7-stage onboarding (scheme-pick-first + skip+reward) // T43 §27: registry labels for the ONLINE tab; T44 §28.2: XP law (client mirrors server via the SAME export); T46 §30: ranked law joins it (tier/season single truth); §62.5b (v1.54): BP law joins the same single truth
 import { BINDINGS, mergeBinds, applyInputSettings, tryAssignBind } from './input.js'; // T1-7: binds live-apply (input.js imports config only — no cycle)
@@ -238,6 +238,7 @@ export class UI {
   // are superseded by the current V3 CSS law (Task 89 L7 pageIn/pageInBack — back direction rides
   // the [data-nav=back] hook below); current T89 hooks + gsap enter kept verbatim.
   show(page, opts = {}) {
+    if (this._pauseSettings) this.closePauseSettings(); // [T167] the pause-settings modal belongs to PAUSE only — any navigation retires it
     // [T121] (10) TRUE VISIT HISTORY — the old pageStack was a nav-tree depth (deduping
     // repeats), so BACK landed on "up one level", not "where I just was". _hist records
     // the literal previous page on every transition (capped 24).
@@ -262,6 +263,8 @@ export class UI {
     this.renderNavChrome(page); // [v1.50 port T90] §55.3 (guarded — inert until index.html re-lands #menu-topbar/#mobile-tabs)
     if (page === 'page-main') this.maybeFetchLadderStrip(); // §49.3 (Task 65 W3, rebuilt): SEASON LADDER strip — auto-fetch ONCE per session, n=10, shared renderer
     if (page === 'page-onboard') this.renderOnboard(); // T89 L10: staged onboarding renders on every show (state-driven)
+    if (page === 'page-account') this.buildAccount(); // [T167] the account face renders on show too (the T91 window-fresh idiom) — the stale-hub note + the authed identity read CURRENT truth on arrival, not just at boot
+    if (page === 'page-online') this.renderOnline(); // [T170] MOBILE VOID FIX — the online face is dynamic-only since T166 (empty #online-body in index.html), but this hook table (the window-fresh idiom every other dynamic face uses) never listed it: the #mobile-tabs ONLINE tab rides the bare this.show(p) path (ui.js mtab handler) and landed on a 0-child body — the user's "looks terrible on mobile". Every path that reaches page-online now renders it, exactly like page-account/page-missions above.
     if (page === 'page-missions') this.renderMissions(); // T89 L5: missions render on show (window-fresh)
     if (page === 'page-bp') this.renderBp(); // [T91 v1.57] meta pages render on show (window-fresh, missions idiom) — the T90 shells' INTEGRATION step
     if (page === 'page-events') this.renderEvents();
@@ -275,7 +278,7 @@ export class UI {
   renderNavChrome(page) {
     const topbar = $('menu-topbar');
     if (topbar) {
-      const labels = { 'page-main': 'ix.pgMain', 'page-modes': 'ix.pgModes', 'page-online': 'ix.pgOnline', 'page-loadout': 'ix.pgLoadout', 'page-settings': 'ix.pgSettings', 'page-help': 'ix.pgHelp', 'page-history': 'ix.pgHistory', 'page-shop': 'ix.pgShop', 'page-social': 'ix.pgSocial', 'page-results': 'ix.pgResults', 'page-missions': 'ix.pgMissions', 'page-pause': 'ix.pgPause', 'page-bp': 'ix.pgBp', 'page-events': 'ix.pgEvents', 'page-bundles': 'ix.pgBundles', 'page-camos': 'ix.pgCamos', 'page-operators': 'ix.pgOps' }; // [T108 N8] page-operators joins the breadcrumb chain · [T117] page-online joins it
+      const labels = { 'page-main': 'ix.pgMain', 'page-modes': 'ix.pgModes', 'page-online': 'ix.pgOnline', 'page-loadout': 'ix.pgLoadout', 'page-settings': 'ix.pgSettings', 'page-help': 'ix.pgHelp', 'page-history': 'ix.pgHistory', 'page-shop': 'ix.pgShop', 'page-social': 'ix.pgSocial', 'page-results': 'ix.pgResults', 'page-missions': 'ix.pgMissions', 'page-pause': 'ix.pgPause', 'page-bp': 'ix.pgBp', 'page-events': 'ix.pgEvents', 'page-bundles': 'ix.pgBundles', 'page-camos': 'ix.pgCamos', 'page-operators': 'ix.pgOps', 'page-career': 'ix.pgCareer', 'page-private': 'ix.pgPrivate', 'page-account': 'ix.account' }; // [T178] the crumb-honesty law — page-career/page-private/page-account join the labels map (career's own breadcrumb NEVER named the current page — the trail showed two pages ago); page-onboard stays crumb-invisible BY LAW (it is the guided first-run flow, not a nav destination) // [T108 N8] page-operators joins the breadcrumb chain · [T117] page-online joins it
       if (page === 'page-main') topbar.classList.add('hidden');
       else {
         topbar.classList.remove('hidden');
@@ -292,7 +295,35 @@ export class UI {
     this.show(target, { back: true });
     SFXtick();
   }
-  hideAll() { $('menu-root').classList.add('hidden'); }
+  hideAll() { if (this._pauseSettings) this.closePauseSettings(); $('menu-root').classList.add('hidden'); } // [T167] resume/quit/retire ride here — the modal never outlives the pause it overlays
+  // [T167] PAUSE SETTINGS MODAL — the CoD in-match law: SETTINGS on the pause menu opens the
+  // settings as a MODAL OVER PAUSE (the main-menu settings page never surfaces in-match — the
+  // slip-guard refuses it); its BACK returns to PAUSE, never the homepage. The REAL #page-settings
+  // node MOVES into the overlay — every tab/handler/id stays alive — and moves home on close.
+  // _curPage/pageStack never leave page-pause (show() is not involved in either direction).
+  openPauseSettings() {
+    const modal = $('pause-settings-modal'), page = $('page-settings');
+    if (!modal || !page) return;
+    this._pauseSettings = true;
+    modal.appendChild(page);
+    modal.classList.remove('hidden');
+    page.classList.remove('hidden');
+    const back = page.querySelector('[data-back]');
+    if (back) back.onclick = () => this.closePauseSettings(); // the modal's BACK = close (the CoD law)
+    SFXtick();
+  }
+  closePauseSettings() {
+    const modal = $('pause-settings-modal'), page = $('page-settings');
+    if (!modal || !page) return;
+    this._pauseSettings = false;
+    modal.classList.add('hidden');
+    page.classList.add('hidden');
+    const root = $('menu-root'), home = $('page-help');
+    if (home && home.parentNode === root) root.insertBefore(page, home); else root.appendChild(page); // restore the DOM home (node order)
+    const back = page.querySelector('[data-back]');
+    if (back) back.onclick = () => { this.show('page-' + (back.dataset.back || 'main')); SFXtick(); }; // the wireNav data-back law restored
+    SFXtick();
+  }
   showLoading() { $('loading-screen').classList.remove('hidden'); }
   hideLoading() { $('loading-screen').classList.add('hidden'); }
 
@@ -369,7 +400,7 @@ export class UI {
     });
     $('btn-resume').onclick = () => this.deps.resumeMatch();
     $('btn-quit').onclick = () => this.deps.quitMatch();
-    $('btn-pause-settings').onclick = () => go('page-settings');
+    $('btn-pause-settings').onclick = () => this.openPauseSettings(); // [T167] in-match settings is the pause MODAL (the main-menu page is slip-guard-refused in-match anyway) — BACK lands on pause, never the homepage
     $('btn-rematch').onclick = () => { this.hideAll(); this.deps.rematch(); };
     const rrBtn = $('btn-res-replay'); if (rrBtn) rrBtn.onclick = () => this.deps.watchReplay(); // §49.2 (Task 65 W2, rebuilt): results WATCH REPLAY (lastPacked-gated at render time)
     const hd = $('btn-hud-done'), hr = $('btn-hud-reset'); // T89 L8: HUD editor bar
@@ -405,7 +436,7 @@ export class UI {
   }
   renderMpRow() {
     if (!this.mpRow) return;
-    const MODES = [['ffa','FREE-FOR-ALL'],['tdm','TEAM DEATHMATCH'],['ct','CUTTHROAT'],['dom','DOMINATION'],['practice','TRAINING RANGE'],['hp','HARDPOINT'],['kc','KILL CONFIRMED'],['snd','SEARCH & DESTROY'],['gg','GUN GAME'],['gf','GUNFIGHT 2V2'],['inf','INFECTED'],['ctl','CONTROL']]; // order == index.html mode-card order (T89: trio joins — 10 cards + practice) · [T139] ct joins — the 12th card (mode count 11 → 12)
+    const MODES = [['ffa','FREE-FOR-ALL'],['tdm','TEAM DEATHMATCH'],['ct','CUTTHROAT'],['dom','DOMINATION'],['practice','TRAINING RANGE'],['hp','HARDPOINT'],['kc','KILL CONFIRMED'],['snd','SEARCH & DESTROY'],['gg','GUN GAME'],['gf','GUNFIGHT 2V2'],['inf','INFECTED'],['ctl','CONTROL'],['br','BATTLE ROYALE']]; // order == index.html mode-card order (T89: trio joins — 10 cards + practice) · [T139] ct joins — the 12th card (mode count 11 → 12) · [T171] br joins — the 13th
     const s = this.mpLobby || { priv: false, code: null, md: null, meHost: false };
     const priv = s.priv && s.code;
     const inp = `<input type="text" id="mp-code-in" value="" placeholder="CODE" maxlength="6" spellcheck="false" class="soc-in" style="letter-spacing:.14em;width:9ch;text-transform:uppercase;flex:0 0 auto">`; // [T123] the input skin rides the theme class (the inline literals moved to style.css)
@@ -418,12 +449,20 @@ export class UI {
     // host-gates, the tk marker (now a card chip — the server setMap gate still enforces),
     // APPLY → deps.setRoomMap, and the HOST RULES numIn row (the t73 pins verbatim).
     let html = `<div class="map-row-head priv-head"><b>${t('m.privateMatch')}</b><span class="set-note">${priv ? 'CODE <span class="priv-code">' + s.code + '</span> · ' + (s.meHost ? t('m.youAreHost') : t('m.hosted')) : ''}</span></div>`;
+    // [T157] THE LOBBY FACE — the parameter chain's step 3 (mode > type > LOBBY > THEN game): status line (CONNECTING → LOBBY — n PILOTS), the roster as chips (names + clan tags), and the DEPLOY button (the any-member §34.1 start) when joined and the room is NOT live (a live room ports you in via the onJoined live-path — the button would be a lie there). Renders on every boot that lands here, including the auto-queue CONNECTING window before the join ack.
+    const ms = this.deps.mpState ? this.deps.mpState() : null;
+    const online = !offline; // [T157] renderMpRow's own truth const (renderOnline's `online` lives in that scope — this is the offline flip)
+    const ps = Array.isArray(s.ps) ? s.ps : [];
+    const nSpec = s.specs || 0;
+    html += `<div class="priv-panel"><div class="map-row-head"><b>${t('mp.lobby')}</b><span class="set-note" id="mp-lobby-status">${!online ? t('on.offline') : (!(ms && ms.joined) ? t('mp.connecting') : (t('mp.pilots', { n: ps.length }) + (nSpec ? ' · ' + t('mp.specs', { n: nSpec }) : '')))}</span></div>${ps.length ? `<div class="priv-row">${ps.map(p => `<span class="rw-chip">${((p && p.cl) ? '[' + p.cl + '] ' : '') + ((p && p.n) || 'PILOT')}</span>`).join('')}</div>` : ''}${online && ms && ms.joined && !ms.inLive ? `<div class="priv-row"><button class="mp-lm" id="mp-deploy">${t('ix.deploy')}</button><span class="set-note">${t('mp.deployHint')}</span></div>` : ''}</div>`;
     if (!priv) html += `<div class="priv-panel"><div class="map-row-head"><b>${t('m.createPriv')} · ${t('m.join')}</b></div><div class="priv-row">${btn('mp-priv-create', t('m.createPriv'))}<span class="set-note">${t('m.orJoin')}</span>${inp}${btn('mp-priv-join', t('m.join'))}</div><div id="mp-priv-msg" class="set-note priv-msg">${offline ? t('on.offline') : ''}</div></div>`;
     else html += `<div class="priv-panel"><div class="priv-row">${btn('mp-copy-link', t('m.copyLink'))}<span class="set-note">${t('m.copyHint', { code: s.code })}</span></div><div id="mp-priv-msg" class="set-note priv-msg"></div></div>`;
-    const seg = MODES.map(([m, l]) => `<button class="mp-lm" data-md="${m}" ${s.meHost ? '' : 'disabled'} style="background:${s.md === m ? 'rgba(232,182,76,.18)' : 'rgba(255,255,255,.05)'};border:1px solid ${s.md === m ? 'rgba(232,182,76,.55)' : 'rgba(255,255,255,.14)'};color:${s.md === m ? '#e8b64c' : '#8fa3b8'};padding:4px 9px;font-size:10px;letter-spacing:.08em;cursor:${s.meHost ? 'pointer' : 'default'};font-family:inherit">${l}${RANKED_MODES.includes(m) ? ' <span title="' + t('m.rankTip') + '" style="color:#e8b64c">·R</span>' : ''}</button>`).join('');
+    const seg = MODES.map(([m, l]) => `<button class="mp-lm" data-md="${m}" ${s.meHost ? '' : 'disabled'} style="background:${s.md === m ? 'rgba(232,182,76,.18)' : 'rgba(255,255,255,.05)'};border:1px solid ${s.md === m ? 'rgba(232,182,76,.55)' : 'rgba(255,255,255,.14)'};color:${s.md === m ? '#e8b64c' : '#8fa3b8'};padding:6px 9px;font-size:10px;letter-spacing:.08em;cursor:${s.meHost ? 'pointer' : 'default'};font-family:inherit">${l}${RANKED_MODES.includes(m) ? ' <span title="' + t('m.rankTip') + '" style="color:#e8b64c">·R</span>' : ''}</button>`).join('');
     html += `<div class="priv-panel"><div class="map-row-head"><b>${t('m.lobbyMode')}${s.meHost ? '' : t('m.hostPicks')}</b><span class="set-note">${t('m.rankedOnly')}</span></div><div class="priv-row">${seg}</div></div>`;
     this.mpRow.innerHTML = html;
     const msg = (t, warn) => { const el = document.getElementById('mp-priv-msg'); if (el) { el.textContent = t; el.style.color = warn ? '#e06c5a' : '#8fa3b8'; } };
+    const dpb = this.mpRow.querySelector('#mp-deploy'); // [T157] the lobby's own DEPLOY — the chain's THEN-game step from the lobby face (the round starts FROM the lobby; the ev:'start' broadcast deploys every lobby rider via the main.js rider law)
+    if (dpb) dpb.onclick = () => { this.deps.startMatch(s.md || 'ffa', this.difficulty); };
     const cr = document.getElementById('mp-priv-create');
     if (cr) cr.onclick = () => { location.href = location.pathname + '?mp=1&priv=1'; };
     const ji = document.getElementById('mp-code-in');
@@ -432,7 +471,7 @@ export class UI {
     if (jb) jb.onclick = () => { const c = ji ? ji.value.trim() : ''; if (!/^[A-Z0-9]{6}$/.test(c)) { msg(t('m.enterCode'), true); return; } location.href = location.pathname + '?mp=1&code=' + c; };
     const cp = document.getElementById('mp-copy-link');
     if (cp) cp.onclick = () => { const url = location.origin + location.pathname + '?mp=1&code=' + s.code; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(() => msg(t('m.linkCopied')), () => msg(url)); else msg(url); };
-    this.mpRow.querySelectorAll('.mp-lm').forEach(b => { b.onclick = () => { if (!s.meHost) return; this.deps.setMode(b.dataset.md); }; }); // T45 §29.3: host pick → server (setMode validates host/idle/mode)
+    this.mpRow.querySelectorAll('.mp-lm[data-md]').forEach(b => { b.onclick = () => { if (!s.meHost) return; this.deps.setMode(b.dataset.md); }; }); // T45 §29.3: host pick → server (setMode validates host/idle/mode) · [T157] [data-md] — the selector was '.mp-lm' bare, which clobbered EVERY .mp-lm onclick INCLUDING the new lobby DEPLOY button (the chip handler silently swallowed it: setMode(undefined) → server reject → the deploy click did nothing; the user-report class)
     // [T120] §51.3: LOBBY MAP host pick — the select-era face retires: a big DISPLAY panel + a
     // card RAIL of LIVE previews (js/mapprev.js, the T117 page-modes idiom). The contract is
     // byte-preserved: host-gated writes, the [T110] FULL roster with the TK marker (now a card
@@ -488,7 +527,7 @@ export class UI {
   setMpLobby(s) { this.mpLobby = s || null; this.renderMpRow(); } // roster-driven re-render (offline: mpRow null → no-op)
 
   hoverFx() {
-    document.querySelectorAll('.mbtn, .mode-card, .lw-item, .ab-chip, .la-chip').forEach(el => {
+    document.querySelectorAll('.mbtn, .mode-card, .lw-card, .ab-chip, .la-chip').forEach(el => { // [T183] .lw-item → .lw-card (the card rail replaced the text rows)
       el.addEventListener('mouseenter', () => SFXtick(true));
     });
   }
@@ -524,7 +563,13 @@ export class UI {
       const nextT = RP_TIERS.find(t => t.min > r.rp);
       const pct = nextT ? Math.min(100, Math.round(((r.rp - curT.min) / (nextT.min - curT.min)) * 100)) : 100;
       const tip = nextT ? (nextT.min - r.rp) + ' RP → ' + nextT.n : t('m.peak', { rp: Math.max(r.pk || 0, r.rp) });
-      mp += row(t('m.rank'), tierOf(r.rp) + ' · ' + r.rp + ' RP · S' + r.s) + `<div class="lvl-bar" title="${tip}"><i style="width:${pct}%"></i></div><div class="lvl-xp">${nextT ? (nextT.min - r.rp) + ' RP → ' + nextT.n : t('m.topTier', { rp: Math.max(r.pk || 0, r.rp) })}</div>`;
+      // [T161 R12/R17] the PLACEMENTS face — the season's first RANKED_PLACEMENTS matches ride
+      // ×2 volatility (the server's own law); the chip shows the count + the ladder state after.
+      // The tier chip color rides RP_TIERS[].c (the config single truth).
+      const place = (r.m != null && r.m < RANKED_PLACEMENTS)
+        ? row('PLACEMENTS', Math.min((r.m || 0) + 1, RANKED_PLACEMENTS) + ' / ' + RANKED_PLACEMENTS + ' · ×2 RP')
+        : '';
+      mp += (place ? place : '') + row(t('m.rank'), '<i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + (curT.c || '#888') + ';margin-right:6px"></i>' + tierOf(r.rp) + ' · ' + r.rp + ' RP · S' + r.s) + `<div class="lvl-bar" title="${tip}"><i style="width:${pct}%"></i></div><div class="lvl-xp">${nextT ? (nextT.min - r.rp) + ' RP → ' + nextT.n : t('m.topTier', { rp: Math.max(r.pk || 0, r.rp) })}</div>`;
     }
     if (this.auth) mp += row('ACCOUNT', this.auth.name) + row('CR', (this.eco && this.eco.cr) || 0); // §53.7: signed-in identity + CR chip (server truth)
     mp += this.dailyChip(c); // §52.5 S5: deterministic daily chip
@@ -970,10 +1015,10 @@ export class UI {
     // the same data-bn attribute, so the proven acquire handler binds unchanged.
     const bnCard = (w, feat) => { // [T117] the store arrangement goes FULL CARD GRAMMAR: the first live window = the FEATURED hero display; the rotation = the item-card grid. Same data-bn wires, same owned/disabled gates.
       const owned = metagame.bnOwned(bnL, w.id);
-      const rows = w.items.map((it) => `<span class="rw-chip" style="--r:${R_HEX[it.r] || R_HEX.common}"><span class="rr">${it.label}</span> ${it.d} · ${metagame.BN_PRICE[it.r]} CR</span>`).join('');
+      const rows = w.items.map((it) => `<span class="rw-chip" style="--r:${R_HEX[it.r] || R_HEX.common}"><span class="rr">${it.label}</span>${it.d ? ' ' + it.d : ''} · ${metagame.BN_PRICE[it.r]} CR</span>`).join(''); // [T178] the undefined law — two bundle items carry no kind descriptor (JADE BAND / FOCUS rendered literal "undefined" to players); the chip now omits the missing face instead of leaking it
       const glyph = R_INIT(w.items.map((it) => it.label).join(' '));
       const buy = owned ? `<span class="item-card-badge own" style="position:static">${t('mg.owned')}</span>` : `<button class="diff-btn" data-bn="${w.id}" ${crL >= w.price ? '' : 'disabled'}>${t('mg.buy')}</button><span class="hero-card-price">${w.price} CR</span>`;
-      if (feat) return `<div class="hero-card" style="--r:#e8b64c"><span class="hero-card-art"><span class="hero-card-glyph">${glyph}</span></span><span class="hero-card-body"><span class="hero-card-kicker">${t('mg.bnWin', { s: w.slot })} · ${w.start} → ${w.end}</span><span class="hero-card-name">${w.items.length} ITEMS · Σ × ${metagame.BN_DISCOUNT}</span><span class="hero-card-items">${rows}</span><span class="hero-card-foot">${buy}</span></span></div>`;
+      if (feat) return `<div class="hero-card" style="--r:#e8b64c"><span class="hero-card-art"><span class="hero-card-glyph">${glyph}</span></span><span class="hero-card-body"><span class="hero-card-kicker">${t('mg.bnWin', { s: w.slot })} · ${w.start} → ${w.end}</span><span class="hero-card-name">${w.items.length} ITEMS · ${t('mg.bnSave', { pct: Math.round((1 - metagame.BN_DISCOUNT) * 100) })}</span><span class="hero-card-items">${rows}</span><span class="hero-card-foot">${buy}</span></span></div>`; // [T178] the player-language law — the raw multiplier face (7/10 as a greek formula) retires for a real savings voice (mg.bnSave ×9); the % is DERIVED from BN_DISCOUNT, one truth
       return `<div class="item-card" style="--r:${R_HEX[(w.items[0] || {}).r] || R_HEX.common}"><span class="item-card-art"><span class="item-card-glyph">${glyph}</span></span><span class="item-card-body"><span class="item-card-name">${t('mg.bnWin', { s: w.slot })}</span><span class="item-card-row"><span class="item-card-rar">${w.start} → ${w.end}</span><span class="item-card-price">${w.price} CR</span></span><span class="hero-card-items">${rows}</span><span class="hero-card-foot">${buy}</span></span></div>`;
     };
     wrap.innerHTML = (wins.length ? bnCard(wins[0], true) : '') + `<div class="bn-grid">${wins.slice(1).map((w) => bnCard(w, false)).join('')}</div>`;
@@ -1001,7 +1046,7 @@ export class UI {
     // zero i18n churn; class order = first-appearance order in WEAPONS (deterministic).
     const classes = [];
     for (const w of WEAPONS) { if (!classes.includes(w.cls)) classes.push(w.cls); }
-    let cmIx = 0; this._clsHex = this._clsHex || {}; const clsHexOf = (cls) => { if (!(cls in this._clsHex)) this._clsHex[cls] = CLASS_HEX[cmIx++ % CLASS_HEX.length]; return this._clsHex[cls]; }; // [T117] stable per-class accent (first-appearance order — the renderCamos class law)
+    const clsHexOf = (cls) => this._clsHexOf(cls); // [T117→T183] stable per-class accent — extracted to _clsHexOf (THE one shared mapping; identical first-appearance order, byte-equal hex values)
     const pk = career.pk || {}; // [T139 N7] the per-CLASS kill-sum (§60.4 variant — camo.js PK law)
     const clsCards = (cls, hex) => { // [T139 N7] the CLASS MASTERY card heads every class group — pkCardData renders the SAME shape the per-weapon cards already do (one card grammar, two ladders)
       const cd = pkCardData(pk, cls);
@@ -1160,7 +1205,7 @@ export class UI {
   }
   onbFinish() { // §52.2 flag law: the legacy onboarded flag lands when the tutorial goes inactive
     try { localStorage.setItem('ironsight.onboarded.v1', '1'); } catch (e) {}
-    this.show('page-main');
+    this.show(this.auth ? 'page-main' : 'page-account'); // [T166] the gate meets first-visits at the tutorial exit — the CoD order: tutorial → account → menu
   }
 
   // ---------- v1.55 T89 L8: HUD editor (drag → vars → persist → restore) ----------
@@ -1396,7 +1441,9 @@ export class UI {
       const pct = Math.min(100, Math.round((cur / span) * 100));
       id += `<div class="cr-row">${t('m.level')} <b>${p.lvl}</b></div><div class="lvl-bar" title="${cur} / ${span} XP"><i style="width:${pct}%"></i></div><div class="lvl-xp">${cur} / ${span} XP</div>`;
       if (p.pr) id += `<div class="cr-row">${t('cr.prestige')} <b>${p.pr}</b></div>`; // [G-9] the lifetime prestige marker (the corner's own cr-row anatomy)
-      if (p.lvl >= MAX_LVL) id += `<div class="cr-row"><button class="diff-btn" id="btn-prestige">${this._prArm ? t('cr.prSure') : t('cr.prGo')}</button></div>`; // [G-9] at-gate: the two-step arm (the clan-leave idiom — the destructive op never fires on the first click)
+      if (p.lvl >= MAX_LVL) id += this._prArm
+        ? `<div class="cr-row"><button class="diff-btn" id="btn-pr-reg">${t('cr.prReg')}</button><button class="diff-btn" id="btn-pr-classic">${t('cr.prClassic')}</button></div>` // [T161 R8] the dual-path pick — regular keeps the shipped grant; classic pays ×1.5 CR + soft-resets the RP ladder (the config's own law)
+        : `<div class="cr-row"><button class="diff-btn" id="btn-prestige">${t('cr.prGo')}</button></div>`; // [G-9] at-gate: the two-step arm (the clan-leave idiom — the destructive op never fires on the first click)
       else id += `<div class="cr-row" style="opacity:.6">${t('cr.prAt', { n: MAX_LVL })}</div>`; // [G-9] below-gate: the S-1 law — the face STATES its gate instead of hiding the loop
       const bp = bpOf(p.xp); // §62.5b (v1.54): BP mirror — same XP single truth as the level row above (zero new state)
       id += `<div class="cr-row">${t('m.bp')} <b>${bp.tier} / ${BP.tiers}</b></div><div class="lvl-bar" title="${bp.into} / ${BP.per} BP XP"><i style="width:${bp.pct}%"></i></div><div class="lvl-xp">${bp.need ? bp.need + ' XP → ' + t('m.bpNext') : t('m.bpMax')}</div>`;
@@ -1430,10 +1477,12 @@ export class UI {
       card(t('cr.identity'), id || `<div class="cr-row">${t('cr.anon')}</div>`) +
       card(t('cr.daily'), daily) +
       card(t('cr.form'), form);
-    const pb = $('btn-prestige'); if (pb) pb.onclick = () => { // [G-9] the two-step prestige arm (the clan-leave idiom) — the sendEco idiom carries the account tok; the server owns every gate
+    const pb = $('btn-prestige'); if (pb) pb.onclick = () => { // [G-9] the two-step prestige arm (the clan-leave idiom) — arms into the [T161 R8] dual-path pick
       if (!this._prArm) { this._prArm = true; this.renderCareer(); return; }
-      this._prArm = false; this.deps.sendEco({ op: 'prestige', tok: this.auth && this.auth.tok });
     };
+    const prGo = (path) => { this._prArm = false; this.deps.sendEco({ op: 'prestige', path, tok: this.auth && this.auth.tok }); }; // the path rides the wire (the hub's eco-section op reads it)
+    const pbr = $('btn-pr-reg'); if (pbr) pbr.onclick = () => prGo('regular');
+    const pbc = $('btn-pr-classic'); if (pbc) pbc.onclick = () => prGo('classic');
     const hEl = document.createElement('div'); hEl.className = 'cr-card';
     const h3 = document.createElement('h3'); h3.textContent = t('cr.history'); hEl.appendChild(h3);
     const hBody = document.createElement('div'); hEl.appendChild(hBody);
@@ -1513,10 +1562,18 @@ export class UI {
   refreshCareer() { this.buildCareerStrip(); }
 
   // ---------- loadout ----------
+  _clsHexOf(cls) { // [T183] the per-class accent MAP — first-appearance order over WEAPONS (the renderCamos class law, extracted so every card family shares THE one mapping; the camo face's own values byte-equal)
+    if (!this._clsHex) {
+      this._clsHex = {}; let ix = 0;
+      for (const w of WEAPONS) if (!(w.cls in this._clsHex)) this._clsHex[w.cls] = CLASS_HEX[ix++ % CLASS_HEX.length];
+    }
+    return this._clsHex[cls];
+  }
   buildLoadout() {
     const list = $('lw-list');
     list.innerHTML = '';
     let lastCls = null; // [T124] the researched class-grouping law (research/pgx_02+03 — the gunsmith list reads weapon classes; the T117 common-region containers + the renderCamos idiom): cls is config single-truth data surfaced raw, zero i18n churn
+    const wk = (this.deps.career && this.deps.career.weaponKills) || {}; // [T183] the card mastery face reads the SAME career truth the camo page renders (the one-truth law)
     for (const w of WEAPONS) {
       if (w.cls !== lastCls) {
         lastCls = w.cls;
@@ -1525,10 +1582,17 @@ export class UI {
         h.textContent = w.cls;
         list.appendChild(h);
       }
+      // [T183] the picker card — the CoD gunsmith assembly the user named (weapon selection
+      // rides CARDS, not naked text rows — the T181 axis-8 violation): the .cm-card grammar
+      // (class-accent border-left --r / head glyph / kills face / meta line) on the SAME rail
+      // mount, so the picker reads as the camo page's card family (cross-page symbol law:
+      // the class hex IS the class, everywhere). Selection = accent, not layout (.sel idiom);
+      // names/classes/RPM are config single-truth + kills is the camo number — zero i18n churn.
       const b = document.createElement('button');
-      b.className = 'lw-item' + (w.id === this.deps.loadout.weapon || w.id === this.deps.loadout.secondary ? ' sel' : '');
-      b.textContent = w.name;
+      b.className = 'lw-card' + (w.id === this.deps.loadout.weapon || w.id === this.deps.loadout.secondary ? ' sel' : '');
+      b.style.setProperty('--r', this._clsHexOf(w.cls));
       b.dataset.id = w.id;
+      b.innerHTML = `<span class="lw-card-head"><span class="lw-glyph">${R_INIT(w.cls)}</span><b>${w.name}</b><span class="lw-kills">${wk[w.name] || 0}</span></span><span class="lw-card-meta">${w.cls} · ${w.rpm} RPM</span>`;
       b.onclick = () => this.selectWeapon(w); // [v1.50 port T90] §60.2 M18: rows AND chips share THE one selection path
       list.appendChild(b);
     }
@@ -1592,23 +1656,66 @@ export class UI {
         const cd = camoCardData(w.name, careerNow.weaponKills);
         const nxt = cd.next != null ? ` · ${t('m.camoNext', { label: (CAMO_TIERS[Math.min(cd.tier, CAMO_TIERS.length - 1)] || {}).label || '', n: cd.next })} (${cd.pct}%)` : ` · ${t('m.camoMax')}`;
         return `<div class="set-note">${t('m.camoTitle')} (${t('m.camoPerWeapon')}) · ${cd.tierLabel} — ${cd.kills} ${t('m.camoKills')}${nxt}</div>`;
+      })() +
+      // [T155 R6] the scorestreak equip row — 3 slots, click cycles the CFG.STREAKS defs
+      // (the MW smartstreak grammar: 10 defs, 3 slots). Persists on loadout.streaks — the
+      // equip single truth the offline match hooks (main.js streakLoadout) and the MP join
+      // payload (mp.js slo) both read. Duplicate defs skip; default [0,1,2] = pre-T155 slots.
+      (() => {
+        const cur = (Array.isArray(this.deps.loadout.streaks) && this.deps.loadout.streaks.length === 3) ? this.deps.loadout.streaks : [0, 1, 2];
+        const chip = (si) => {
+          const def = CFG.STREAKS[cur[si]] || CFG.STREAKS[si];
+          return `<button class="fin-chip" data-si="${si}" style="flex-basis:100%;text-align:left">${t('m.streakSlot', { n: si + 1 })}: ${def.name} <span style="opacity:.55">${def.cost}</span></button>`;
+        };
+        return `<div class="set-note" style="margin-top:6px">${t('m.streakTitle')}</div>` + chip(0) + chip(1) + chip(2);
       })();
-    // attachments
+    // [T155 R6] the streak chip clicks — cycle that slot to the next def (skipping defs
+    // already equipped in the other slots), persist, re-render (the equip idiom).
+    $('lw-stats').querySelectorAll('button[data-si]').forEach((b) => {
+      b.onclick = () => {
+        const si = +b.dataset.si;
+        const cur = (Array.isArray(this.deps.loadout.streaks) && this.deps.loadout.streaks.length === 3) ? this.deps.loadout.streaks.slice() : [0, 1, 2];
+        let next = (cur[si] + 1) % CFG.STREAKS.length;
+        for (let g = 0; g < CFG.STREAKS.length && cur.some((v, j) => j !== si && v === next); g++) next = (next + 1) % CFG.STREAKS.length;
+        cur[si] = next;
+        this.deps.loadout.streaks = cur;
+        saveLoadout(this.deps.loadout);
+        SFXtick();
+        this.refreshLoadout();
+      };
+    });
+    // attachments — [T152 E3] the per-weapon gunsmith face: universal tier (ATTACHMENTS) ∪
+    // SIGNATURE[sel], grouped by MW slot family (flex-basis:100% headers), cap 5 (MW max-5
+    // law), kill-ladder locks read career.weaponKills[weapon NAME] (the camo stat — name-keyed
+    // at BOTH kill sites, verified T152). Locked chips reuse the fin-chip idiom: the label
+    // states the requirement, no toast spam; equip is blocked client-side (the FINISHES
+    // career-stat precedent — the hub validates ids+cap, not career state).
     const slots = $('la-slots'); slots.innerHTML = '';
     const cur = this.deps.loadout.attachments[sel] || [];
-    for (const [id, a] of Object.entries(ATTACHMENTS)) {
-      const b = document.createElement('button');
-      b.className = 'la-chip' + (cur.includes(id) ? ' on' : '');
-      b.innerHTML = `${a.name}<span class="la-pros">${a.pros}</span><span class="la-cons">${a.cons}</span>`;
-      b.onclick = () => {
-        const arr = this.deps.loadout.attachments[sel]
-          || (this.deps.loadout.attachments[sel] = []); // T1-5: lazily create for pre-expansion saved loadouts
-        if (arr.includes(id)) this.deps.loadout.attachments[sel] = arr.filter(x => x !== id);
-        else if (arr.length < 3) arr.push(id);
-        saveLoadout(this.deps.loadout);
-        SFXtick(); this.refreshLoadout();
-      };
-      slots.appendChild(b);
+    const attKills = (careerNow.weaponKills && careerNow.weaponKills[w.name]) || 0;
+    const universal = Object.entries(ATTACHMENTS).map(([id, a]) => ({ ...a, id }));
+    for (const [cat, catKey] of [['muzzle', 'm.attCatMuzzle'], ['barrel', 'm.attCatBarrel'], ['mag', 'm.attCatMag'], ['grip', 'm.attCatGrip'], ['stock', 'm.attCatStock']]) {
+      const parts = universal.filter(a => a.cat === cat).concat((SIGNATURE[sel] || []).filter(s => s.cat === cat));
+      if (!parts.length) continue;
+      const h = document.createElement('div');
+      h.className = 'la-cat'; h.textContent = t(catKey);
+      slots.appendChild(h);
+      for (const a of parts) {
+        const locked = !!a.unlock && attKills < a.unlock;
+        const b = document.createElement('button');
+        b.className = 'la-chip' + (cur.includes(a.id) ? ' on' : '') + (locked ? ' locked' : '');
+        b.innerHTML = `${a.name}<span class="la-pros">${locked ? t('m.attLock', { n: a.unlock }) : a.pros}</span><span class="la-cons">${a.cons}</span>`;
+        b.onclick = () => {
+          if (locked) return; // locked chip: label states the requirement — no toast spam
+          const arr = this.deps.loadout.attachments[sel]
+            || (this.deps.loadout.attachments[sel] = []); // T1-5: lazily create for pre-expansion saved loadouts
+          if (arr.includes(a.id)) this.deps.loadout.attachments[sel] = arr.filter(x => x !== a.id);
+          else if (arr.length < 5) arr.push(a.id); // [T152 E3] cap 3→5 (MW max-5 law)
+          saveLoadout(this.deps.loadout);
+          SFXtick(); this.refreshLoadout();
+        };
+        slots.appendChild(b);
+      }
     }
     // T2-5 Phase 1 (Task 48): weapon finishes — career-stat unlocks, client-side (cosmetics.js)
     const fp = $('fin-pick'); fp.innerHTML = '';
@@ -1655,7 +1762,7 @@ export class UI {
     cosChips($('emote-pick'), EMOTES, this.deps.loadout.emote, false, v => this.deps.loadout.emote = v, 'em');
     this._renderPreview(mw); // [T120 c] the weapon preview re-renders on EVERY detail refresh (attachments/finish/charm/weapon)
     // selection highlight
-    document.querySelectorAll('.lw-item').forEach(el => {
+    document.querySelectorAll('.lw-card').forEach(el => { // [T183] the card rail is the selection surface
       el.classList.toggle('sel', el.dataset.id === sel || el.dataset.id === this.deps.loadout.secondary);
     });
     this._renderSlotChips(); // [v1.50 port T90] §60.2 M18: chips re-sync on every selection change (same cycle as the rows)
@@ -1857,6 +1964,7 @@ export class UI {
       gameplay: ['colorVision', 'sens', 'adsSens', 'invertY', 'fov', 'autoSprint', 'damageNumbers', 'hitMarker', 'camShake', 'lang'],
       video: ['quality', 'qualityPinned', 'viewmodel', 'bob', 'tilt', 'fpsCounter', 'minimapRotate'],
       audio: ['volMaster', 'volSfx', 'volMusic', 'voiceOn', 'volVoice'], // [T140 G-4] the voice keys join the tab-defaults law
+      a11y: ['subtitles', 'reducedMotion', 'highContrast', 'uiScale', 'flashCap', 'hitSound', 'mono'], // [T161 R13/R15] the accessibility tab owns its key set (the TAB_KEYS law)
       crosshair: [], // s.ch = the clone below (the editor's object key set)
       controls: ['binds', 'padBinds', 'aimMode', 'crouchMode', 'camMode', 'gpSens', 'gpDeadzone', 'gpLookDeadzone', 'gpVibration', 'gpAssist', 'touchSens', 'touchStickDead', 'touchLookDead', 'touchHybridDrag', 'gyroAim', 'gyroSens', 'aimCurve', 'touchLayout', 'fireAuto', 'touchAssist'],
       online: ['mpRegion', 'mpRegionUrl'],
@@ -1955,6 +2063,26 @@ export class UI {
       const d3 = row(t('s.volMusic'), slider('volMusic', 0, 1, 0.05, v => Math.round(v * 100) + '%')); bindSlider(d3, 'volMusic', v => Math.round(v * 100) + '%');
       const d4v = row(t('s.voiceOn'), toggle('voiceOn', s.voiceOn)); bindToggle(d4v, 'voiceOn'); // [T140 G-4] the mic is an OPT-IN (the honest browser-mic law — default OFF; PTT = hold T in MP)
       const d5v = row(t('s.volVoice'), slider('volVoice', 0, 1, 0.05, v => Math.round(v * 100) + '%')); bindSlider(d5v, 'volVoice', v => Math.round(v * 100) + '%'); // [T140 G-4] the per-speaker gain default
+    }
+    if (tab === 'a11y') {
+      // [T161 R13/R15] THE ACCESSIBILITY TAB — the depth rung (subtitles / reduced-motion /
+      // high-contrast / flash-cap) + the breadth rung (ui-scale, hit pitch, mono). Every
+      // control live-applies through settingsChanged → applySettings's a11y fan-out leg
+      // (effects IR_A11Y + hud setters + audio setters + the body theme classes).
+      const dA = row('SUBTITLES', toggle('subtitles', s.subtitles), 'Announcer lines mirror into the caption bar (deaf/hoh access).');
+      bindToggle(dA, 'subtitles');
+      const dA2 = row('REDUCED MOTION', toggle('reducedMotion', s.reducedMotion), 'Screen shake ×0.2, HUD pulses off — the prefers-reduced-motion analog.');
+      bindToggle(dA2, 'reducedMotion');
+      const dA3 = row('HIGH CONTRAST', toggle('highContrast', s.highContrast), 'High-contrast UI theme: stronger borders, cleaner text.');
+      bindToggle(dA3, 'highContrast');
+      const dA4 = row('FLASH LIMIT', slider('flashCap', 0, 0.8, 0.1, v => +v === 0 ? 'OFF' : Math.round((1 - v) * 100) + '%'), 'Caps explosion/muzzle strobe brightness (the photosensitivity-safe ceiling).');
+      bindSlider(dA4, 'flashCap', v => +v === 0 ? 'OFF' : Math.round((1 - v) * 100) + '%');
+      const dA5 = row('UI SCALE', slider('uiScale', 0.8, 1.4, 0.05, v => Math.round(v * 100) + '%'), 'HUD + menu scale.');
+      bindSlider(dA5, 'uiScale', v => Math.round(v * 100) + '%');
+      const dA6 = row('HIT SOUND PITCH', seg('hitSound', ['DEFAULT', 'LOW', 'HIGH'], (s.hitSound || 'default').toUpperCase()), 'Pitch-differentiated hit feedback.');
+      bindSeg(dA6, 'hitSound', v => v.toLowerCase());
+      const dA7 = row('MONO AUDIO', toggle('mono', s.mono), 'Single-channel downmix (single-sided hearing).');
+      bindToggle(dA7, 'mono');
     }
     if (tab === 'crosshair') {
       // G-1 (v1.78): the editor completion — 5 shapes + outline/opacity/dot-size + presets + share code,
@@ -2247,7 +2375,7 @@ export class UI {
       };
       // ---- §53.7 (Task 74): ACCOUNT + QUICKPLAY + RANKED QUEUE rows (pre-join senders) ----
       const acct = document.createElement('div'); acct.className = 'set-note'; acct.style.minWidth = '100%'; acct.id = 'account-status';
-      acct.textContent = this.auth ? ('ACCOUNT: ' + this.auth.name) : 'ACCOUNT: anonymous — register/login (server) unlocks the store, market, trades and clans';
+      acct.textContent = this.auth ? ('ACCOUNT: ' + this.auth.name + (this.auth.disc ? '#' + this.auth.disc : '')) : 'ACCOUNT: anonymous — register/login (server) unlocks the store, market, trades and clans'; // [T166] the pilot ID rides every account band
       body.appendChild(acct);
       // ---- [T121 S-2] §53.7: the ACCOUNT FORM (the authRow() builder — shared with the
       // ONLINE hub). The sender (sendAuth), the response routing (mp.onAuth → setAuth →
@@ -2256,12 +2384,12 @@ export class UI {
       // with no form behind it. Validation is the SERVER's — the err map in onAuth surfaces
       // name/pass/taken/bad verbatim-honest; input maxLength mirrors the server constraints.
       body.appendChild(this.authRow());
-      const aRow = row('PLAY WITH PEOPLE', `<button class="seg-btn" id="q-quick-btn">QUICKPLAY</button> <button class="seg-btn" id="q-rank-btn">JOIN RANKED QUEUE</button>`, 'QUICKPLAY drops you into the fullest open lobby; the ranked queue widens the bucket by RP tier as you wait (§30.8: RP is public rank, not hidden MMR).');
+      const aRow = row('PLAY WITH PEOPLE', `<button class="seg-btn" id="q-quick-btn">QUICKPLAY</button> <button class="seg-btn" id="q-rank-btn">JOIN RANKED QUEUE</button>`, 'QUICKPLAY joins the fullest open lobby preset with the MATCH MODE picked on the ONLINE hub, lands you in the LOBBY (roster + mode + map + rules), and the round starts from there — DEPLOY or any member starting deploys everyone; the ranked queue widens the bucket by RP tier as you wait (§30.8: RP is public rank, not hidden MMR).');
       body.appendChild(aRow);
       const quickB = aRow.querySelector('#q-quick-btn'); quickB.textContent = 'QUICKPLAY';
-      quickB.onclick = () => { this.deps.sendQ({ op: 'quick', mode: 'ffa', tok: this.auth && this.auth.tok, pid: this.deps.devicePid() }); const q0 = aRow.querySelector('#q-status'); if (q0) q0.textContent = 'Finding the fullest open lobby…'; };
+      quickB.onclick = () => { this.deps.sendQ({ op: 'quick', mode: this._qpMode || 'ffa', tok: this.auth && this.auth.tok, pid: this.deps.devicePid() }); const q0 = aRow.querySelector('#q-status'); if (q0) q0.textContent = 'Finding the fullest open lobby…'; }; // [T157] the picked mode rides (the picker rows live on the ONLINE hub page — the same instance state)
       const rankB = aRow.querySelector('#q-rank-btn'); rankB.textContent = 'JOIN RANKED QUEUE';
-      rankB.onclick = () => { this.deps.sendQ({ op: 'rank', mode: 'tdm', tok: this.auth && this.auth.tok, pid: this.deps.devicePid() }); const q1 = aRow.querySelector('#q-status'); if (q1) q1.textContent = 'Ranked queue: bucketed by RP tier — widening with wait…'; };
+      rankB.onclick = () => { this.deps.sendQ({ op: 'rank', mode: this._rqMode || 'tdm', tok: this.auth && this.auth.tok, pid: this.deps.devicePid() }); const q1 = aRow.querySelector('#q-status'); if (q1) q1.textContent = 'Ranked queue: bucketed by RP tier — widening with wait…'; }; // [T157] the picked ranked mode rides (RANKED_MODES-only — the hub gate enforces)
       const qStat = document.createElement('div'); qStat.className = 'set-note'; qStat.style.minWidth = '100%'; qStat.id = 'q-status';
       qStat.textContent = 'Idle.';
       body.appendChild(qStat);
@@ -2405,8 +2533,10 @@ export class UI {
       const career = this.deps.career;
       career.cosOwned = (career.cosOwned && typeof career.cosOwned === 'object') ? career.cosOwned : {};
       const bnSet0 = metagame.bundleOwnedItems(career.bn);
+      const dstr0 = metagame.evDayOf(Date.now()); const fitem0 = ECO_POOL[[...String(dstr0)].reduce((a, c) => a + c.charCodeAt(0), 0) % ECO_POOL.length]; // [T156 R16] the featured pick — the SAME deterministic law on the offline face
       const meta = $('shop-meta'); // [T125] the CR/inventory face MOVED verbatim to the band (the online-meta idiom)
       if (meta) meta.textContent = 'CR ' + (career.cr | 0) + ' · inventory ' + (Object.keys(career.cosOwned).length + bnSet0.size) + ' item(s)';
+      const featN0 = document.createElement('div'); featN0.className = 'set-note'; featN0.innerHTML = '<b>' + t('shop.featured', { n: fitem0.label }) + '</b>'; el.appendChild(featN0);
       const grid = document.createElement('div'); grid.className = 'item-grid'; // [T117] the text-button row retires — the store is CARDS: rarity art face + price chip + owned badge (the same acquire law underneath)
       for (const it of ECO_POOL) {
         const owned = career.cosOwned[it.id] > 0 || bnSet0.has(it.id);
@@ -2424,6 +2554,16 @@ export class UI {
           this.setMsg(it.label + ' acquired — equip it in LOADOUT.');
         };
         grid.appendChild(b);
+      }
+      const offOwned = ECO_POOL.filter((it) => career.cosOwned[it.id] > 0); // [T156 R11] the offline sell-back — banks on THIS device (the offline-store law: the CR half banks locally)
+      if (offOwned.length) {
+        const rhead0 = document.createElement('div'); rhead0.className = 'set-note'; rhead0.style.marginTop = '10px'; rhead0.textContent = t('eco.recycle'); grid.appendChild(rhead0);
+        for (const it of offOwned) {
+          const rb0 = document.createElement('button'); rb0.className = 'diff-btn'; rb0.style.minWidth = '150px';
+          rb0.textContent = it.label + ' · RECYCLE +40 CR';
+          rb0.onclick = () => { delete career.cosOwned[it.id]; career.cr = (career.cr | 0) + ECO_DUPE_REFUND; saveCareer(career); this.buildCareerStrip(); this.renderShop(); SFXtick(); this.setMsg(it.label + ' recycled +40 CR.'); };
+          grid.appendChild(rb0);
+        }
       }
       el.appendChild(grid);
       const note = document.createElement('div'); note.className = 'set-note'; note.style.marginTop = '10px';
@@ -2462,6 +2602,8 @@ export class UI {
     const grid = document.createElement('div'); grid.className = 'shop-grid';
     const tok = this.auth && this.auth.tok;
     if (this.shopTab === 'store') {
+      const dstr = metagame.evDayOf(Date.now()); const fitem = ECO_POOL[[...String(dstr)].reduce((a, c) => a + c.charCodeAt(0), 0) % ECO_POOL.length]; // [T156 R16] the deterministic daily featured pick (the evDayOf clock, the pool single truth — same pick server/client, zero new state)
+      const featN = document.createElement('div'); featN.className = 'set-note'; featN.innerHTML = '<b>' + t('shop.featured', { n: fitem.label }) + '</b>'; grid.appendChild(featN);
       for (const it of ECO_POOL) {
         const owned = (eco.own[it.id] || 0) > 0;
         const b = document.createElement('button');
@@ -2469,6 +2611,16 @@ export class UI {
         b.textContent = it.label + ' · ' + (it.r || '').toUpperCase() + ' · ' + (ECO_PRICE[it.r] || '?') + ' CR' + (owned ? ' · OWNED' : '');
         b.onclick = () => { if (owned || !this.ecoGate('STORE OFFLINE — the item store rides the hub; connect with an account (ONLINE tab).')) return; const pr = ECO_PRICE[it.r] || 0; if (((this.eco && this.eco.cr) | 0) < pr) { this.toast('NEEDS ' + pr.toLocaleString('en-US') + ' CR — you have ' + ((this.eco && this.eco.cr) | 0).toLocaleString('en-US') + '. Earn CR by playing: wins pay ' + ECO_EARN.base + ' base +' + ECO_EARN.kill + ' per kill +' + ECO_EARN.win + ' per win.'); return; } this.deps.sendEco({ op: 'buy', id: it.id, tok }); }; // [T135] the gate speaks (the silent-shop law) · [T137] the CR afford pre-empt states the earn path (never a blind fire into the server's reject)
         grid.appendChild(b);
+      }
+      const ownedRows = ECO_POOL.filter((it) => (eco.own[it.id] || 0) > 0); // [T156 R11/R16] the sell-back face — owned pool items recycle at the SHIPPED dupe-refund anchor (the hub owns the rate; this face only speaks it)
+      if (ownedRows.length) {
+        const rhead = document.createElement('div'); rhead.className = 'set-note'; rhead.style.marginTop = '10px'; rhead.textContent = t('eco.recycle'); grid.appendChild(rhead);
+        for (const it of ownedRows) {
+          const rb = document.createElement('button'); rb.className = 'diff-btn'; rb.style.minWidth = '150px';
+          rb.textContent = it.label + ' · RECYCLE +40 CR';
+          rb.onclick = () => { if (!this.ecoGate('STORE OFFLINE — recycling rides the hub; connect with an account (ONLINE tab).')) return; this.deps.sendEco({ op: 'recycle', id: it.id, tok: this.auth && this.auth.tok }); };
+          grid.appendChild(rb);
+        }
       }
     } else if (this.shopTab === 'cases') {
       const b = document.createElement('button');
@@ -2570,10 +2722,56 @@ export class UI {
     const online = !!(this.deps.mp && this.deps.mp());
     const live = !!(this.deps.mpLive && this.deps.mpLive()); // [T120 S-3] the note gate reads the CONNECTION truth, not the boot flag — a menu-side ensureIo connect retires it on re-render
     const meta = $('online-meta'); // [T124] the band context face — the ACCOUNT literal MOVED verbatim from the retired in-body head note
-    if (meta) meta.textContent = this.auth ? ('ACCOUNT: ' + this.auth.name) : 'ACCOUNT: anonymous';
+    if (meta) meta.textContent = this.auth ? ('ACCOUNT: ' + this.auth.name + (this.auth.disc ? '#' + this.auth.disc : '')) : 'ACCOUNT: anonymous'; // [T166] the pilot ID rides the hub band — the add-friend hint names this face
     const grid = document.createElement('div'); grid.className = 'onl-grid';
     const play = document.createElement('div'); play.className = 'onl-play';
     const side = document.createElement('div'); side.className = 'onl-side';
+    // [T157] THE PARAMETER CHAIN steps 1-2 — what game mode > what game type: the picker rows sit ABOVE the playlist cards and the queue request carries the PICK (the hardcoded ffa/tdm literals retire); the lobby face is step 3, the server-driven deploy is step 4
+    const QP_MODES = [['ffa','FREE-FOR-ALL'],['tdm','TEAM DEATHMATCH'],['ct','CUTTHROAT'],['dom','DOMINATION'],['hp','HARDPOINT'],['kc','KILL CONFIRMED'],['snd','SEARCH & DESTROY'],['gg','GUN GAME'],['gf','GUNFIGHT 2V2'],['inf','INFECTED'],['ctl','CONTROL']]; // the 11 competitive cards (practice stays the offline training range — never a matchmaking mode)
+    const RK_LABELS = { tdm: 'TEAM DEATHMATCH', dom: 'DOMINATION', hp: 'HARDPOINT', kc: 'KILL CONFIRMED', snd: 'SEARCH & DESTROY' }; // §30.1 ranked-only (ffa/gg/practice OUT — the hub gate enforces the same set)
+    const RK_MODES = RANKED_MODES.map(m => [m, RK_LABELS[m] || m.toUpperCase()]);
+    if (!this._qpMode) this._qpMode = 'ffa';
+    if (!this._rqMode) this._rqMode = 'tdm';
+    const modeRow = (label, arr, attr, pickKey) => {
+      const w = document.createElement('div'); w.className = 'onl-modes'; w.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:0 0 8px';
+      const lb = document.createElement('span'); lb.className = 'set-note'; lb.style.flex = '0 0 auto'; lb.textContent = label; w.appendChild(lb);
+      arr.forEach(([m, l]) => {
+        const b = document.createElement('button'); b.className = 'mp-lm'; b.dataset[attr] = m; b.textContent = l;
+        const on = this[pickKey] === m;
+        b.style.cssText = `background:${on ? 'rgba(232,182,76,.18)' : 'rgba(255,255,255,.05)'};border:1px solid ${on ? 'rgba(232,182,76,.55)' : 'rgba(255,255,255,.14)'};color:${on ? '#e8b64c' : '#8fa3b8'};padding:4px 9px;font-size:10px;letter-spacing:.08em;cursor:pointer;font-family:inherit`;
+        b.onclick = () => { this[pickKey] = m; w.querySelectorAll(`[data-${attr}]`).forEach(x => { const isOn = x.dataset[attr] === m; x.style.background = isOn ? 'rgba(232,182,76,.18)' : 'rgba(255,255,255,.05)'; x.style.border = `1px solid ${isOn ? 'rgba(232,182,76,.55)' : 'rgba(255,255,255,.14)'}`; x.style.color = isOn ? '#e8b64c' : '#8fa3b8'; }); SFXtick(); };
+        w.appendChild(b);
+      });
+      return w;
+    };
+    // [T166] THE ACCORDION LAW — the user's own arrangement: the online hub reads as four
+    // collapsible sections (BIG MAP · SKIRMISHES · RANKED PLAY · PRIVATE MATCH), SKIRMISHES
+    // open by default. Headers toggle; the bodies keep the PROVEN senders verbatim (the
+    // T117 wiring law — no new net paths, one visible arrangement).
+    const accSect = (title, open) => {
+      const h = document.createElement('button'); h.type = 'button'; h.className = 'la-title';
+      h.style.cssText = 'display:flex;width:100%;text-align:left;cursor:pointer;background:none;border:0;padding:7px 0 3px;color:inherit;font:inherit;letter-spacing:inherit';
+      const bd = document.createElement('div'); bd.style.display = open ? '' : 'none';
+      const draw = () => { h.textContent = (bd.style.display !== 'none' ? '\u25BE ' : '\u25B8 ') + title; };
+      draw();
+      h.onclick = () => { bd.style.display = bd.style.display !== 'none' ? 'none' : ''; draw(); SFXtick(); };
+      play.append(h, bd);
+      return bd;
+    };
+    const bigBd = accSect('BIG MAP', false); // the user's first section — the big-stage playlist
+    const skBd = accSect('SKIRMISHES', true); // the everyday path leads open
+    const rkBd = accSect('RANKED PLAY', false);
+    const prBd = accSect('PRIVATE MATCH', false); // the user's decree: private = its own accordion
+    const bigNote = document.createElement('div'); bigNote.className = 'set-note'; bigNote.style.marginBottom = '6px';
+    bigNote.textContent = 'The largest stages in the fleet — YARD · WINDFARM · TEMPLE · STADIUM · SOLAR (the 60×44 tier). The hub boots this playlist\u2019s world from that pool.'; // raw-EN island (the §53.2 social-page precedent)
+    const bcard = document.createElement('button'); bcard.className = 'onl-card'; // [T166] the big playlist card — same grammar as the featured pair
+    const bct = document.createElement('span'); bct.className = 'onl-card-t'; bct.textContent = 'BIG MAP PLAYLIST';
+    const bcd = document.createElement('span'); bcd.className = 'onl-card-d'; bcd.textContent = t('ix.onlineHint');
+    bcard.append(bct, bcd);
+    bcard.onclick = () => this.onlineQueue('quick', t('on.quickWait'), { big: true }); // [T166] the big pref rides — the hub buckets a B-room from the pool
+    bigBd.append(bigNote, bcard);
+    skBd.appendChild(modeRow('MATCH MODE', QP_MODES, 'qpmd', '_qpMode'));
+    rkBd.appendChild(modeRow('RANKED MODE', RK_MODES, 'rqmd', '_rqMode'));
     const q = document.createElement('button'); q.className = 'onl-card'; // [T124] the featured-first playlist card (the "Find A Match" first box)
     const qt = document.createElement('span'); qt.className = 'onl-card-t'; qt.textContent = t('on.quick');
     const qd = document.createElement('span'); qd.className = 'onl-card-d'; qd.textContent = t('ix.onlineHint'); // the hub's own hint face rides the card
@@ -2586,9 +2784,10 @@ export class UI {
     r.onclick = () => this.onlineQueue('rank', t('on.rankWait')); // [T120 S-3] same law, ranked row
     const qp = document.createElement('div'); qp.className = 'set-note'; qp.textContent = t('on.qpPref'); // the honest port-to-live preface sits under the playlist cards
     const stat = document.createElement('div'); stat.className = 'set-note'; stat.style.minHeight = '16px'; stat.id = 'online-status';
-    play.append(q, r, qp, stat);
-    // [T124] PRIVATE — the third matchmaking surface, one traversal deeper by the [T122] nesting decree (the location.href flows unchanged); the section faces reuse m.privateMatch/ix.account
-    const prH = document.createElement('div'); prH.className = 'la-title'; prH.textContent = t('m.privateMatch');
+    skBd.append(q, qp); rkBd.append(r); play.append(stat); // [T166] the cards ride their sections; the status line stays always-visible
+    // [T124] PRIVATE — the third matchmaking surface — now its own ACCORDION body ([T166]):
+    // the create/join controls ride prBd verbatim; the la-title header retires into the
+    // accordion header (the section faces reuse m.privateMatch/ix.account elsewhere).
     const c = document.createElement('button'); c.className = 'diff-btn'; c.textContent = t('on.create');
     c.onclick = () => { location.href = location.pathname + '?mp=1&priv=1'; };
     const ji = document.createElement('input'); ji.id = 'online-code';
@@ -2601,8 +2800,9 @@ export class UI {
     const row2 = document.createElement('div'); row2.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px';
     const orLbl = document.createElement('span'); orLbl.className = 'set-note'; orLbl.textContent = t('on.or');
     row2.append(c, orLbl, ji, jb);
+    prBd.append(row2); // [T166] the private controls ride their accordion body
     const accH = document.createElement('div'); accH.className = 'la-title'; accH.textContent = t('ix.account');
-    side.append(prH, row2, accH, this.authRow()); // [T121 S-2] the §53.7 form rides the HUB — the face the HELP-page promise and the S-2 hint name (the settings ONLINE tab carries the same builder)
+    side.append(accH, this.authRow()); // [T121 S-2] the §53.7 form rides the HUB — the face the HELP-page promise and the S-2 hint name (the settings ONLINE tab carries the same builder)
     side.appendChild(this.pwaRow()); // [T132-R] the platform row — three honest states (running / prompt / hint)
     if (!online && !live) {
       const d = document.createElement('div'); d.className = 'set-note';
@@ -2631,10 +2831,10 @@ export class UI {
       b.onclick = () => { const reg = this.deps.resolveRegion(this.deps.settings, location.hostname); this.setOnlineMsg(t('on.connecting', { url: (reg || {}).url || '' })); retry(); };
       chips.appendChild(b);
       const cur = this.deps.settings && this.deps.settings.mpRegion; // [T114] the AUTO-RESOLVE chip — the user's own ask, upgraded: the fail face doesn't just re-dial the dead endpoint, it OFFERS the working one; one click flips mpRegion to the hub and the SAME retry closure re-resolves to it and re-runs the op (the region re-derives at every onlineQueue/authSend entry)
-      const hubRow = MP_REGIONS.find(r => r.id === 'hub');
-      if (cur !== 'hub' && hubRow && typeof hubRow.endpoint === 'string') {
+      const hubRow = MP_REGIONS.find(r => r.id === 'render') || MP_REGIONS.find(r => r.id === 'hub'); // [T144] prefer the LIVE free row (Render, wire-verified); the PRO row stays the fallback for when that Space exists
+      if (cur !== hubRow.id && hubRow && typeof hubRow.endpoint === 'string') {
         const hb = document.createElement('button'); hb.className = 'seg-btn'; hb.textContent = t('on.useHub');
-        hb.onclick = () => { this.deps.settings.mpRegion = 'hub'; this.deps.settingsChanged(); this.setOnlineMsg(t('on.connecting', { url: hubRow.endpoint })); retry(); };
+        hb.onclick = () => { this.deps.settings.mpRegion = hubRow.id; this.deps.settingsChanged(); this.setOnlineMsg(t('on.connecting', { url: hubRow.endpoint })); retry(); };
         chips.appendChild(hb);
       }
       s.appendChild(chips); this._statRetry = chips; // the auto-resolve watcher removes the WHOLE chip row (the mpLive law stays intact)
@@ -2650,7 +2850,7 @@ export class UI {
     }
   }
 
-  onlineQueue(op, waitMsg) {
+  onlineQueue(op, waitMsg, opts = {}) { // [T166] opts.big rides — the BIG MAP accordion's queue pref
     if (op === 'quick') this.setOnlineMsg(t('on.qpPref')); // [T121] (6) the port-to-live preface — rank unaffected, mid-start join // [T120 S-3] connect-on-demand — the first queue intent boots the transport (the senders' `if (socket)` law meant every menu-side sendQ dropped silently), then the queue op rides the proven sender verbatim; unreachable endpoints REPORT on the status line, never throw (the §27.2 law)
     const pid = this.deps.devicePid && this.deps.devicePid();
     if (!pid) { this.setOnlineMsg(t('on.qPid'), true); return; }
@@ -2660,18 +2860,23 @@ export class UI {
       if (error) { this.setOnlineMsg(t('on.connectFail', { url: reg.url }), true, () => this.onlineQueue(op, waitMsg)); return; } // [T141] the RETRY chip rides the fail face — the user's suggestion law
       this.renderOnline(); // the face re-reads mpLive — the offline note retires the moment the transport is real
       this.setOnlineMsg(waitMsg);
-      this.deps.sendQ({ op, mode: op === 'rank' ? 'tdm' : 'ffa', tok: this.auth && this.auth.tok, pid });
+      this.deps.sendQ({ op, mode: op === 'rank' ? (this._rqMode || 'tdm') : (this._qpMode || 'ffa'), big: !!(opts && opts.big), tok: this.auth && this.auth.tok, pid }); // [T157] the PICKED mode rides — what game mode is step 1 of the chain (the hardcoded literals retire); the server presets the lobby with it (quick) or buckets the queue by it (rank) · [T166] the big pref rides the same payload
     });
   }
 
   authSend(op, name, pass) { // [T121 S-2] the account form's send path — the onlineQueue idiom verbatim (pid check → resolveRegion → ensureIo → honest fail face), then the proven sender; the server's answer (tok or the err map) lands via onAuth
     const pid = this.deps.devicePid && this.deps.devicePid();
-    if (!pid) { this.setOnlineMsg(t('on.qPid'), true); return; }
+    const gate = (msg, bad, retry) => { // [T167] THE GATE VOICE — the account face hosts the auth arc's EVERY state. The pre-wire guards used to speak ONLY into the hidden ONLINE status element (setOnlineMsg targets #online-status): a sleepy free-tier hub (Render sleeps ~30-90s; ensureIo times out) read as a DEAD button — the user's "this login screen is not working" with nothing on screen. The gate line carries the same truth; the T141 retry chip still arms on the online hub.
+      const gl = $('acc-auth-status');
+      if (gl && !$('page-account').classList.contains('hidden')) { gl.textContent = msg; gl.style.color = bad ? '#e06c5a' : ''; }
+      this.setOnlineMsg(msg, bad, retry);
+    };
+    if (!pid) { gate(t('on.qPid'), true); return; }
     const reg = this.deps.resolveRegion(this.deps.settings, location.hostname);
-    this.setOnlineMsg(t('on.connecting', { url: reg.url }));
+    gate(t('on.connecting', { url: reg.url }));
     this.deps.ensureIo(this.deps.settings, ({ error }) => {
-      if (error) { this.setOnlineMsg(t('on.connectFail', { url: reg.url }), true, () => this.authSend(op, name, pass)); return; } // [T141] the RETRY chip (the same suggestion law on the auth arc)
-      this.setOnlineMsg(t('on.authSent'));
+      if (error) { gate(t('on.connectFail', { url: reg.url }), true, () => this.authSend(op, name, pass)); return; } // [T141] the RETRY chip rides (online) + [T167] the gate speaks the dial failure — [T175] the waking truth now rides the i18n string itself (all 9 langs); the EN-only inline append retires
+      gate(t('on.authSent'));
       this.deps.sendAuth({ op, name, pass, pid });
     });
   }
@@ -2713,13 +2918,32 @@ export class UI {
     // (procedural portrait bust + big name face, the T117 ops grammar) + big-number STAT TILES.
     // The session panel + authRow third face + the arm-then-confirm danger zone ride verbatim.
     const card = document.createElement('div'); card.className = 'priv-panel acc-hero';
-    card.innerHTML = `<div class="acc-id"><span class="acc-bust"><span class="op-tile-face" style="--op-accent:#e8b64c"><span class="op-vis"></span><span class="op-sh"></span><span class="op-init">${(a ? a.name : 'O')[0].toUpperCase()}</span></span></span><div class="acc-id-body"><div class="acc-name">${a ? a.name : t('ac.anon')}</div><div class="acc-sub">${t('m.level').toUpperCase()} ${p ? (p.lvl + (p.pr ? ' · P' + p.pr : '')) : '—'} · ${t('ac.pid')} ${pid ? String(pid).slice(0, 10) + '…' : '—'}</div></div></div>`
+    card.innerHTML = `<div class="acc-id"><span class="acc-bust"><span class="op-tile-face" style="--op-accent:#e8b64c"><span class="op-vis"></span><span class="op-sh"></span><span class="op-init">${(a ? a.name : 'O')[0].toUpperCase()}</span></span></span><div class="acc-id-body"><div class="acc-name">${a ? a.name + (a.disc ? '#' + a.disc : '') : t('ac.anon')}</div><div class="acc-sub">${t('m.level').toUpperCase()} ${p ? (p.lvl + (p.pr ? ' · P' + p.pr : '')) : '—'} · ${t('ac.pid')} ${pid ? String(pid).slice(0, 10) + '…' : '—'}</div></div></div>` // [T166] the pilot ID rides the name face (the CoD DisplayName#number law)
       + `<div class="stat-tiles">` + tile(t('m.level'), lvl) + tile('CR', (this.eco && this.eco.cr) || 0) + tile('MATCHES', c.matches || 0) + `</div>`;
     body.appendChild(card);
     const sess = document.createElement('div'); sess.className = 'priv-panel';
     sess.innerHTML = `<div class="map-row-head"><b>${t('ac.session')}</b></div><div class="set-note" style="margin-bottom:4px">${a ? a.name : t('ac.notSigned')}</div>`;
+    if (a && !a.disc) { // [T167] the stale-hub mirror — state-driven, re-renders with the face (the same truth the onAuth toast speaks)
+      const note = document.createElement('div'); note.className = 'set-note'; note.style.color = '#e06c5a'; note.style.margin = '2px 0 6px';
+      note.textContent = 'Signed in on an OUTDATED hub build — redeploy hub_files.zip (see DEPLOY.md, sha 598475b2…): pilot IDs (#number), friend adds by NAME#ID and BIG MAP queues need the T166 hub.';
+      sess.appendChild(note);
+    }
     sess.appendChild(this.authRow()); // [T122] the shared §53.7 form rides the account face
     body.appendChild(sess);
+    // [T166] THE BOOT GATE PANEL — the CoD zero-friction law: pilot #1 is ONE CLICK and
+    // offline never blocks the menu. The hub self-seeds ADMIN on a fresh deploy (the [T166]
+    // hub law) — the card below enters with those exact creds, no typing.
+    const gate = document.createElement('div'); gate.className = 'priv-panel';
+    gate.innerHTML = `<div class="map-row-head" style="display:flex;align-items:baseline;gap:.6rem"><b>FIRST PILOT</b><span class="set-note">the seeded boot account</span></div><div class="set-note" style="margin:4px 0 6px">The hub seeds ADMIN on a fresh deployment — one click enters, no typing. New pilot? Register below. Playing solo? Continue offline.</div>`; // raw-EN island (the §53.2 precedent)
+    const gstat = document.createElement('div'); gstat.className = 'set-note'; gstat.id = 'acc-auth-status'; gstat.style.minHeight = '14px'; gstat.style.marginBottom = '6px';
+    const grow = document.createElement('div'); grow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+    const gbtn = document.createElement('button'); gbtn.className = 'diff-btn'; gbtn.textContent = 'ENTER AS ADMIN';
+    gbtn.onclick = () => this.authSend('login', 'ADMIN', 'IronsightIRONSIGHT'); // the seeded creds — zero-friction by law
+    const offb = document.createElement('button'); offb.className = 'diff-btn'; offb.textContent = 'CONTINUE OFFLINE';
+    offb.onclick = () => { SFXtick(); this.show('page-main'); };
+    grow.append(gbtn, offb);
+    gate.append(gstat, grow);
+    body.appendChild(gate);
     const dz = document.createElement('div'); dz.className = 'priv-panel';
     dz.innerHTML = `<div class="map-row-head"><b>${t('ac.danger')}</b></div><button class="diff-btn" id="acc-reset">${t('ac.resetLocal')}</button><div class="set-note" style="margin-top:6px">${t('ac.resetDesc')}</div>`;
     body.appendChild(dz);
@@ -2756,18 +2980,38 @@ export class UI {
       // idiom: this branch family is the §53.2 EN island (the T119 S-1 precedent).
       const career = this.deps.career || {};
       const pid = this.deps.devicePid && this.deps.devicePid();
-      const who = (this.auth && this.auth.name) || (pid ? 'pid ' + pid.slice(0, 8) : 'anonymous (no device identity — reload once)');
+      const who = this.auth ? (this.auth.name + (this.auth.disc ? '#' + this.auth.disc : '')) : (pid ? 'pid ' + pid.slice(0, 8) : 'anonymous (no device identity — reload once)'); // [T166] the ID rides the offline identity line too
       const meta = $('soc-meta'); // [T125] the identity line MOVED verbatim to the band (the online-meta idiom)
       if (meta) meta.textContent = 'OPERATOR: ' + who + ' · level ' + (career.lvl || 1) + ' · ' + (career.cr | 0) + ' CR · ' + (career.matches || 0) + ' match(es)';
-      const unl = document.createElement('div'); unl.className = 'set-note'; unl.style.marginTop = '6px';
-      unl.textContent = 'Friends, clans and trades are server truth — this device keeps only your identity and career. FRIENDS: add by exact name. CLAN: create costs 500 CR, joining needs level 10. TRADES: up to 5 items per side.';
-      const hint = document.createElement('div'); hint.className = 'set-note'; hint.style.marginTop = '6px';
-      hint.textContent = 'Connect on the ONLINE tab: QUICKPLAY connects this device on intent; REGISTER / LOG IN there binds your account to this device (the device career merges once, server-side).';
-      // [T120] the offline face rides the panel grammar — the notes read inside a card, not bare
+      // [T120] the offline face rides the panel grammar — the notes read inside a card, not bare.
+      // [T183] the modular decomposition (the T181 axis-8 audit + the user's CoD-reference law):
+      // the three server-truth topics ride MODULE CARDS with headers (the priv-panel +
+      // map-row-head grammar — the T167 pause-modal / account-panel family), not one prose
+      // block; the connect module carries a CTA button (the rubric empty-state CTA law — a
+      // sentence is not an exit). Raw-EN island law holds (T121 S-2): zero i18n churn.
       const off = document.createElement('div'); off.className = 'priv-panel';
       off.innerHTML = `<div class="map-row-head"><b>SOCIAL</b><span class="set-note">SERVER TRUTH</span></div>`;
-      off.appendChild(unl); off.appendChild(hint);
+      const unl = document.createElement('div'); unl.className = 'set-note'; unl.style.marginTop = '6px';
+      unl.textContent = 'This device keeps only your identity and career — friends, clans and trades live on the server.';
+      off.appendChild(unl);
       el.appendChild(off);
+      const socMod = (head, line) => {
+        const m = document.createElement('div'); m.className = 'priv-panel';
+        m.innerHTML = `<div class="map-row-head"><b>${head}</b></div>`;
+        const p = document.createElement('div'); p.className = 'set-note'; p.style.marginTop = '4px';
+        p.textContent = line;
+        m.appendChild(p);
+        el.appendChild(m);
+        return m;
+      };
+      socMod('FRIENDS', 'Add by exact name or the full NAME#ID — requests resolve once you are connected.');
+      socMod('CLAN', 'Create costs 500 CR; joining needs level 10; weekly clan wars score win/draw points.');
+      socMod('TRADES', 'Offer up to 5 items per side — escrow-held on the server.');
+      const conn = socMod('CONNECT', 'QUICKPLAY connects this device on intent; REGISTER / LOG IN on the ONLINE tab binds your account to this device (the device career merges once, server-side).');
+      const cta = document.createElement('button'); cta.className = 'diff-btn'; cta.style.marginTop = '6px'; // the CTA exits to the connect surface (btn-online's own renderOnline+go path)
+      cta.textContent = 'CONNECT';
+      cta.onclick = () => { this.renderOnline(); this.show('page-online'); };
+      conn.appendChild(cta);
       return;
     }
     const s = this.social || { friends: [], reqsIn: [], clan: null };
@@ -2779,7 +3023,7 @@ export class UI {
     // owner's member list carries KICK and the join requests carry ACCEPT/DENY — all
     // speaking the server's own ops (clanCreate/clanJoinReq/clanResp/clanKick/clanLeave).
     const meta = $('soc-meta'); // [T125] the band identity face (the online-meta idiom) — 'OPERATOR: ' rides the offline face's own literal
-    if (meta) meta.textContent = this.auth ? ('OPERATOR: ' + this.auth.name) : 'OPERATOR: anonymous';
+    if (meta) meta.textContent = this.auth ? ('OPERATOR: ' + this.auth.name + (this.auth.disc ? '#' + this.auth.disc : '')) : 'OPERATOR: anonymous'; // [T166] the pilot ID rides the band
     const st = document.createElement('div'); st.id = 'soc-status'; st.className = 'soc-status' + (this._socBad ? ' bad' : ''); // the ack/err line (the setOnlineMsg T121 idiom — this page's own element)
     st.textContent = this._socMsg || '';
     el.appendChild(st);
@@ -2867,20 +3111,27 @@ export class UI {
     } else { // [T125] the FRIENDS tab (the IGN primary tab) — the fr head retires into the tab face (MOVED verbatim); the pley.gg law keeps the request rows distinct
       const fg = document.createElement('div'); fg.className = 'soc-body';
     const fadd = document.createElement('div'); fadd.className = 'soc-row'; // the add-by-name form rides the same inline anatomy (the inline-form conversion complete)
-    const fi = document.createElement('input'); fi.className = 'soc-in'; fi.placeholder = t('fr.namePh'); fi.spellcheck = false; fi.maxLength = 16; fi.style.flex = '1 1 16ch';
+    const fi = document.createElement('input'); fi.className = 'soc-in'; fi.placeholder = t('fr.namePh'); fi.spellcheck = false; fi.maxLength = 22; fi.style.flex = '1 1 18ch'; // [T166] the ID fits: NAME (16) + # + 4 digits
     const fab = document.createElement('button'); fab.className = 'diff-btn'; fab.textContent = t('fr.add');
     fab.onclick = () => { const name = fi.value.trim(); if (!name) { this.setSocMsg(t('soc.e.to'), true); return; } clearMsg(); this.deps.sendSoc({ op: 'friendReq', name, tok }); };
     fadd.append(fi, fab);
     fg.appendChild(fadd);
+    const fhint = document.createElement('div'); fhint.className = 'set-note'; fhint.style.marginTop = '4px';
+    fhint.textContent = 'Adds resolve by exact NAME or the full NAME#ID — your own ID lives on the account page and the ONLINE band.'; // [T166] raw-EN island (the §53.2 precedent)
+    fg.appendChild(fhint);
+      const gi = document.createElement('input'); gi.className = 'soc-in'; gi.placeholder = t('eco.giftPh'); gi.spellcheck = false; gi.inputMode = 'numeric'; gi.style.flex = '0 0 9ch'; // [T156 R11] the shared gift-amount input — the friend rows' GIFT buttons read it (the friend-gate is the hub's §53.3 law; the receipt rides the recipient's inbox)
+      const grow = document.createElement('div'); grow.className = 'soc-row'; grow.append(gi); fg.appendChild(grow);
       for (const f of [...(s.friends || [])].sort((a, b) => (b.on ? 1 : 0) - (a.on ? 1 : 0))) { // [T125] presence-first (the shs_08 law) — render-order only
       const row = document.createElement('div'); row.className = 'soc-row';
       const lbl = document.createElement('span'); lbl.className = 'set-note';
-      lbl.textContent = f.n + ' · ' + (f.on ? t('soc.on', { r: f.room }) : t('soc.off'));
+      lbl.textContent = f.n + (f.disc ? '#' + f.disc : '') + ' · ' + (f.on ? t('soc.on', { r: f.room }) : t('soc.off')); // [T166] the ID rides the friend row
+      const gf = document.createElement('button'); gf.className = 'diff-btn'; gf.textContent = t('eco.gift'); // [T156 R11] the gift verb — friend-gated server-side (the ECO_GIFT.cap ceiling owns legitimacy)
+      gf.onclick = () => { const amt = Math.floor(Number(gi.value)) | 0; if (!(amt >= 1)) { this.setSocMsg(t('eco.giftPh'), true); return; } clearMsg(); this.deps.sendEco({ op: 'gift', pid: f.pid, n: amt, tok: this.auth && this.auth.tok }); };
       const rm = document.createElement('button'); rm.className = 'diff-btn';
       let armed = false;
       rm.textContent = t('fr.remove');
       rm.onclick = () => { if (!armed) { armed = true; rm.textContent = t('fr.sure'); return; } this.deps.sendSoc({ op: 'friendRemove', pid: f.pid, tok }); };
-      row.append(lbl, rm);
+      row.append(lbl, gf, rm);
       fg.appendChild(row);
     }
     for (const o of s.reqsIn || []) {
@@ -2907,9 +3158,11 @@ export class UI {
       // 'pid' reuses the qPid remedy, 'anon' = the expired stays-signed-in session.
       const authErr = { name: t('on.authErrName'), pass: t('on.authErrPass'), taken: t('on.authErrTaken'), bad: t('on.authErrBad'), pid: t('on.qPid'), anon: t('on.authErrAnon') }[d.err] || String(d.err);
       this.setOnlineMsg(authErr, true);
+      const gateLine = $('acc-auth-status'); // [T166] the gate hosts the auth arc too — the early return above used to silence the account face (E2E-caught: a failed boot-gate login showed nothing)
+      if (gateLine) gateLine.textContent = 'AUTH: ' + authErr;
       return;
     }
-    if (d.tok) this.auth = { name: d.name, tok: d.tok, pid: d.pid };
+    if (d.tok) this.auth = { name: d.name, tok: d.tok, pid: d.pid, disc: d.disc }; // [T166] the pilot ID rides every ack shape
     if (d.op === 'logout') { this.auth = null; this.mpProfile = null; this.mpRanked = null; } // [G-9] the logout clears the server-truth corner (the anon face returns)
     if (d.profile) this.setMpProfile(d.profile); // [G-9] the auth ack's profile hydrates the identity corner — the payload RODE since T123 but the client never drank it (E2E-caught: the corner stayed dark until a room join; a max-level player must see the prestige arm at the CAREER page right after login)
     if (d.ranked) this.setMpRanked(d.ranked); // [G-9] the ranked corner joins the same hydration (the onJoined idiom verbatim)
@@ -2919,9 +3172,22 @@ export class UI {
     if (!$('page-shop').classList.contains('hidden')) this.renderShop();
     if (!$('page-social').classList.contains('hidden')) this.renderSocial();
     if (!$('page-online').classList.contains('hidden')) this.renderOnline(); // [T121 S-2] the account form re-renders to its authed face (LOG OUT) or back to the anonymous face
+    // [T166] THE BOOT GATE arc — auth answers land on the account face while it hosts the gate:
+    // errors read on its own status line; a landed identity (tok) proceeds to the menu (the
+    // CoD law — sign in once, play).
+    const accPage = $('page-account');
+    const staleHub = !!(d.tok && d.disc === undefined && (d.op === 'login' || d.op === 'register' || d.op === 'me')); // [T167] THE HUB BUILD SEAM — the T166 hub stamps disc on EVERY register/login/me ack; a tok WITHOUT disc = a pre-T166 hub (the stale zip grabbed at deploy time)
+    if (accPage && !accPage.classList.contains('hidden')) {
+      const gateLine = $('acc-auth-status');
+      if (gateLine) gateLine.textContent = d.err ? ('AUTH: ' + d.err) : (d.tok ? 'SIGNED IN' + (staleHub ? ' — hub build outdated (see the account page)' : '') : '');
+      if (d.tok && (d.op === 'register' || d.op === 'login' || d.op === 'me')) this.show('page-main');
+    }
+    if (staleHub) { // [T167] the honest face NAMES the fix instead of leaving half-dead features (the session still plays MP — friend IDs, BIG MAP queues and the seeded-gate experience degrade on an old hub)
+      this.toast('Hub build outdated — redeploy hub_files.zip (DEPLOY.md): pilot IDs, friend adds by NAME#ID and BIG MAP queues need the T166 hub.');
+    }
     if (!$('page-account').classList.contains('hidden')) this.buildAccount(); // [T122] (7) the account face mirrors the auth truth live
     const acc = $('account-status');
-    if (acc) acc.textContent = this.auth ? ('ACCOUNT: ' + this.auth.name + ' · pid ' + (this.auth.pid || '').slice(0, 8)) : 'ACCOUNT: anonymous — register/login (server) unlocks the store, market, trades and clans';
+    if (acc) acc.textContent = this.auth ? ('ACCOUNT: ' + this.auth.name + (this.auth.disc ? '#' + this.auth.disc : '') + ' · pid ' + (this.auth.pid || '').slice(0, 8) + (staleHub ? ' — OUTDATED hub: redeploy hub_files.zip (DEPLOY.md)' : '')) : 'ACCOUNT: anonymous — register/login (server) unlocks the store, market, trades and clans'; // [T166] the pilot ID rides · [T167] the stale-hub note rides the identity line
   }
   onEco(d) {
     if (!d) return;
@@ -2935,6 +3201,8 @@ export class UI {
     }
     if (d.err) { this.setMsg('SHOP: ' + d.err); return; }
     if (d.op === 'claim' && !d.err) this.setMsg('CLAIMED +50 CR');
+    if (d.op === 'gift' && d.ok) this.setMsg(t('eco.giftSent', { n: '' })); // [T156 R11] the gift ack (the amount is the sender's own knowledge — the receipt carries it)
+    if (d.op === 'recycle' && !d.err) { this.setMsg('RECYCLED +40 CR'); if (!$('page-shop').classList.contains('hidden')) this.renderShop(); } // [T156 R11/R16] the sell-back ack re-renders the shop (the fresh-face idiom)
     if (d.op === 'tkco' && d.co) { this.deps.sendEco({ op: 'tkpack', co: d.co, tok: this.auth && this.auth.tok }); return; } // [T110] the SANDBOX PSP-return leg — the modal confirm simulated the approval; a real PSP replaces this auto-leg with the hosted-checkout redirect + its signed webhook → the credited face arrives identically
     if (d.tk !== undefined && this.eco) this.eco.tk = d.tk; // [T110] the token balance rides the chain (state + every tk ack)
     if (d.tkhist && this.eco) this.eco.tkhist = d.tkhist; // [T110] the receipt trail rides

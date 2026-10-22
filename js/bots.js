@@ -9,6 +9,7 @@ import * as FX from './effects.js';
 import * as SFX from './audio.js';
 import { rayBoxForBots } from './aiutil.js';
 import { ops3dRig } from './ops3d.js'; // [T130] the skinned bot body (no cycle: ops3d imports three/addons only)
+import { TRAINER } from './trainer.js'; // [T168] FREEZE BOTS + ONE-SHOT KILL flags — leaf module (config.js-only import), no cycle
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 const R = 0.38;
@@ -60,6 +61,12 @@ function botWeapon(kind) {
     case 'pdw': return { id: 'hornet', name: 'HORNET', dmg: 13, rpm: 900, auto: true, falloff: [10, 22, 0.55], hs: 1.4, sound: 'smg', tracer: 0xffb08a };
     case 'autosg': return { id: 'breacher', name: 'BREACHER', dmg: 10, rpm: 280, auto: true, pellets: 7, falloff: [5, 13, 0.3], hs: 1.25, sound: 'shotgun', tracer: 0xffb08a };
     case 'dmr': return { id: 'longbow', name: 'LONGBOW', dmg: 52, rpm: 200, auto: false, falloff: [60, 110, 0.8], hs: 1.75, sound: 'sniper', tracer: 0xcfe9ff };
+    // [T161 R25] the new-arm bot mirrors — the R30 wave's classes join the bot armory
+    // (same ×0.85 dmg-ratio family; sound/tracer keys stay inside the shipped palettes).
+    case 'hyper': return { id: 'tempest', name: 'TEMPEST', dmg: 12, rpm: 1150, auto: true, falloff: [8, 18, 0.5], hs: 1.4, sound: 'smg', tracer: 0xffb08a };
+    case 'slug': return { id: 'marauder', name: 'MARAUDER', dmg: 72, rpm: 110, auto: false, falloff: [22, 44, 0.62], hs: 1.6, sound: 'shotgun', tracer: 0xffc27a };
+    case 'lightbelt': return { id: 'nomad', name: 'NOMAD', dmg: 19, rpm: 720, auto: true, falloff: [24, 50, 0.7], hs: 1.45, sound: 'lmg', tracer: 0xffb08a };
+    case 'antimat': return { id: 'reaper', name: 'REAPER', dmg: 120, rpm: 40, auto: false, falloff: [999, 999, 1], hs: 2.0, sound: 'sniper', tracer: 0xcfe9ff };
     case 'belt': return { id: 'vulture', name: 'VULTURE', dmg: 18, rpm: 640, auto: true, falloff: [26, 55, 0.7], hs: 1.4, sound: 'lmg', tracer: 0xffb08a };
     case 'mp': return { id: 'sting', name: 'STING', dmg: 11, rpm: 900, auto: true, falloff: [10, 24, 0.55], hs: 1.5, sound: 'pistol', tracer: 0xffb08a };
     case 'dbl': return { id: 'judge', name: 'JUDGE', dmg: 11, rpm: 140, auto: false, pellets: 8, falloff: [4, 10, 0.25], hs: 1.25, sound: 'shotgun', tracer: 0xffb08a };
@@ -72,8 +79,8 @@ function botWeapon(kind) {
 const BOT_POOLS = [
   ['ar', 'ar', 'smg', 'lmg', 'shotgun'],                                       // RECRUIT
   ['ar', 'smg', 'lmg', 'shotgun', 'carbine', 'pdw'],                           // REGULAR
-  ['ar', 'smg', 'lmg', 'shotgun', 'carbine', 'pdw', 'br', 'belt'],             // VETERAN
-  ['ar', 'carbine', 'br', 'pdw', 'belt', 'dmr', 'autosg', 'dbl'],              // ELITE
+  ['ar', 'smg', 'lmg', 'shotgun', 'carbine', 'pdw', 'br', 'belt', 'hyper', 'lightbelt'], // VETERAN — [T161 R25] the new arms mix in
+  ['ar', 'carbine', 'br', 'pdw', 'belt', 'dmr', 'autosg', 'dbl', 'hyper', 'slug', 'lightbelt', 'antimat'], // ELITE — [T161 R25]
 ];
 
 // ---------------- manager ----------------
@@ -123,13 +130,18 @@ export class BotManager {
     const names = [...CFG.BOT_NAMES].sort(() => Math.random() - 0.5);
     for (let i = 0; i < count; i++) {
       let team;
-      if (mode === 'ffa' || mode === 'gg') team = i + 1; // everyone hostile (player = 0) — gg joins the ffa rule (SS22.4)
+      if (mode === 'ffa' || mode === 'gg' || mode === 'br') team = i + 1; // everyone hostile (player = 0) — gg joins the ffa rule (SS22.4) · [T171] BR: solo drop — all hostile
       else if (mode === 'inf') team = 0; // T89 L2: Infected boots ALL-survivor (team 0) — Patient Zero converts at first:15 (modes.js), snapshot law alive0:1
       else if (mode === 'ct') team = (i + 1) % 3; // [T139] CUTTHROAT 3v3v3: round-robin — player(0) + bots 3,3,3 across teams 0/1/2 (players:9 → 8 bots; (i+1)%3 lands exactly 3/3/3)
       else team = i < count / 2 ? 0 : 1; // first half allies of player(0)
       // T1-5 (Task 37-a): tier-weighted pool (BOT_POOLS above) instead of the fixed five-kind list
       const kinds = BOT_POOLS[Math.min(BOT_POOLS.length - 1, Math.max(0, difficulty))] || BOT_POOLS[0];
       const b = new Bot(names[i % names.length] + (i >= names.length ? '-' + (Math.floor(i / names.length) + 1) : ''), team, tier, kinds[i % kinds.length]);
+      // [T161 R25] the loadout-personality roll — ±6% dmg/rpm jitter per spawn (the gunsmith-lite
+      // variety: no two bots handle identically; the tier dmgMult stacks on top unchanged).
+      const jitter = 0.94 + Math.random() * 0.12;
+      b.weapon.dmg = Math.round(b.weapon.dmg * jitter * 100) / 100;
+      b.weapon.rpm = Math.round(b.weapon.rpm * jitter);
       this.buildMesh(b);
       this.bots.push(b);
       this.respawnAt(b, true);
@@ -281,8 +293,23 @@ export class BotManager {
         continue;
       }
       b.blindedT = Math.max(0, b.blindedT - dt);
+      if (TRAINER.on.freeze) { // [T168] FREEZE BOTS — the classic freeze: AI, physics, turning and FIRE all stop; the pose holds mid-stride (the rig stops with the skip — the [T133] corpse-drive law is untouched, dead bots never reach this branch). Bots stay shootable (applyDamage is fire-path, not update-path)
+        continue;
+      }
       // perception (staggered)
       b.perceptT -= dt;
+      if (mode === 'br' && World.brZone) { // [T171] THE GAS ROTATE — outside (or near the edge of) the wall → path INSIDE on a 3 s cadence; combat still fires (strafing is path-free), the goal redirects the moment the fight ends
+        const z = World.brZone;
+        if (Math.hypot(b.pos.x - z.cx, b.pos.z - z.cz) > z.r - 2) {
+          b.rotT = (b.rotT ?? 0) - dt;
+          if (b.rotT <= 0) {
+            const a = Math.atan2(b.pos.z - z.cz, b.pos.x - z.cx);
+            const rr = Math.max(2, z.r * 0.55);
+            this.setGoal(b, new THREE.Vector3(z.cx + Math.cos(a) * rr, 0, z.cz + Math.sin(a) * rr));
+            b.rotT = 3;
+          }
+        }
+      }
       if (b.perceptT <= 0) {
         b.perceptT = 0.15;
         const foes = [];
@@ -487,6 +514,7 @@ export class BotManager {
   }
   applyDamage(b, dmg, head, attacker, weaponName) {
     if (!b.alive) return { died: false };
+    if (TRAINER.on.oneshot && attacker && attacker.isPlayer) dmg = 99999; // [T168] ONE-SHOT KILL — every player-dealt bot-damage path funnels here (bullets via routeDamageToBot, explosions via match.areaDamage, bot-melee), so ONE gate covers them all; bot-vs-bot (attacker.isPlayer falsy) stays fair
     b.hp -= dmg;
     b.spottedT = 0;
     // aggro

@@ -4,20 +4,30 @@
 // tactical/empty reload, shotgun shell load, grenades, flash, melee
 // ============================================================
 import * as THREE from 'three';
-import { CFG, WEAPONS, MELEE, FRAG, FLASH, ATTACHMENTS } from './config.js';
+import { CFG, WEAPONS, MELEE, FRAG, FLASH, ATTACHMENTS, SIGNATURE } from './config.js'; // [T152 E3] SIGNATURE joins — the per-weapon gunsmith catalogs (single truth, hub imports the same export)
 import { World, rayAABB, segmentBlocked } from './world.js';
 import * as FX from './effects.js';
 import * as SFX from './audio.js';
 import { padRumble } from './gamepad.js';
 import { sendFire } from './mp.js'; // MP-2: fire rays to the authoritative server (no-op unless mp.joined)
+import { TRAINER } from './trainer.js'; // [T168] the FPS trainer flags — leaf module (config.js-only import), no cycle · NO RECOIL / NO SPREAD / INFINITE AMMO / INFINITE NADES read these at the exact engine sites below
 import { finishById, charmById } from './cosmetics.js'; // T2-5 Phase 1+3 (Task 48/55): pure defs — no cycle (cosmetics imports nothing)
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 
+// [T152 E3] the MERGED-CATALOG lookup — universal tier (ATTACHMENTS) ∪ the weapon's own
+// SIGNATURE ids. Unknown ids still skip silently (pre-expansion saves, the T1-5 law).
+export function sigById(defId, id) {
+  const list = SIGNATURE[defId];
+  return list ? list.find(s => s.id === id) : undefined;
+}
 export function makeWeapon(defId, attachIds = []) {
   const base = WEAPONS.find(w => w.id === defId);
   const def = { ...base, falloff: [...base.falloff], stats: { ...base.stats } };
-  for (const a of attachIds) if (ATTACHMENTS[a]) ATTACHMENTS[a].apply(def);
+  for (const a of attachIds) {
+    const part = ATTACHMENTS[a] || sigById(defId, a);
+    if (part) part.apply(def);
+  }
   def.recoilMult = def._recoilMult || 1;
   def.attachIds = [...attachIds];
   return { def, mag: def.mag, reserve: def.reserve, attachIds: def.attachIds };
@@ -103,9 +113,10 @@ export class WeaponSystem {
     this.vm = null;                       // current viewmodel group
     this.state = 'idle';                  // idle|reload|swap|inspect|melee|nade
     this.stateT = 0; this.stateDur = 0; this.reloadStage = 0;
-    this.fireT = 0; this.bloomT = 0; this.shotIdx = 0; this.triggerHeld = false;
+    this.fireT = 0; this.bloomT = 0; this.shotIdx = 0; this.triggerHeld = false; this.burstLeft = 0; // [T161 R30] the burst queue
     this.adsAmt = 0; this.ads = false; this.adsEdge = false; this.scope2 = false;
     this.sprintAmt = 0;
+    this.sprintHoldT = 1; // [T152] sprint-out gate clock — starts satisfied (spawn ≠ sprint)
     this.swayX = 0; this.swayY = 0; this.kickZ = 0; this.kickRot = 0;
     this.nades = { frag: 3, flash: 2 };
     this.nadeType = 'frag';
@@ -187,6 +198,7 @@ export class WeaponSystem {
 
   // ---------------- firing ----------------
   currentSpread() {
+    if (TRAINER.on.spread) return 0; // [T168] NO SPREAD — the cone pinned to 0 (the :260 jitter gate is `if (spread > 0)`, so 0 is a clean no-jitter)
     const d = this.def, s = this.hooks.getSettings(), p = this.player;
     let sp = d.spreadBase;
     if (this.ads && d.adsSpread !== undefined) return d.adsSpread * (p.crouch > 0.5 ? 0.7 : 1);
@@ -201,29 +213,37 @@ export class WeaponSystem {
 
   tryFire(dt) {
     const d = this.def, w = this.w;
-    if (this.state !== 'idle') { if (d.auto && this.triggerHeld) this.triggerHeld = false; return; }
+    if (this.state !== 'idle') { if (d.auto && this.triggerHeld) this.triggerHeld = false; this.burstLeft = 0; return; } // [T161 R30] a non-idle state kills the committed burst
     this.fireT -= dt;
-    const want = d.auto ? this.triggerHeld : this._fireEdge;
-    if (want && this.fireT <= 0) {
-      if (w.mag <= 0) { SFX.dryFire(); this._fireEdge = false; this.triggerHeld = false; this.hooks.onDry && this.hooks.onDry(); if (w.reserve > 0) this.reload(); return; }
+    const want = d.auto ? this.triggerHeld : (this._fireEdge || this.burstLeft > 0);
+    if (want && this.fireT <= 0 && this.sprintHoldT >= (d.sprintOut || 0)) { // [T152] sprint-out gate — the stock-family parts move a real number
+      if (w.mag <= 0) { SFX.dryFire(); this._fireEdge = false; this.triggerHeld = false; this.burstLeft = 0; this.hooks.onDry && this.hooks.onDry(); if (w.reserve > 0) this.reload(); return; }
       this.fireT = 60 / d.rpm;
+      // [T161 R30] the burst law — d.burst (centurion's 3): the trigger pull fires the FIRST
+      // round and queues (d.burst − 1) continuation rounds that ride the same fireT cadence
+      // regardless of the trigger (MW burst grammar; committed bursts clear the sprint gate).
+      // Legacy defs (no burst field): burstLeft stays 0 — the path is byte-identical.
+      if (this.burstLeft > 0) this.burstLeft--;
+      else if (d.burst) this.burstLeft = d.burst - 1;
       this.shoot();
       this._fireEdge = false;
-      if (!d.auto) this.triggerHeld = false;
+      if (!d.auto && !this.burstLeft) this.triggerHeld = false;
     }
   }
 
   shoot() {
     const d = this.def, w = this.w, p = this.player, s = this.hooks.getSettings();
-    w.mag--;
+    if (!TRAINER.on.ammo) w.mag--; // [T168] INFINITE AMMO — the mag never drops (trainer.hold pins mags+reserve per-frame too)
     this.shotIdx++;
     SFX.gunshot(d.sound, null, !!d.suppressed, d.id); // [T117] wid rides — the hotlink layer picks the per-weapon real voice
     padRumble('shot', (d.dmg || 20) / 34); // dual-rumble per shot, scaled by weapon damage class
     if (!d.suppressed) this.hooks.onShotNoise && this.hooks.onShotNoise(p.centerPos(_v3));
     // recoil [pattern per shot]
     const [pk, yk] = d.pattern(this.shotIdx - 1);
-    p.recoilPitch += pk * d.recoilMult * (this.ads ? 0.82 : 1);
-    p.recoilYaw += yk * d.recoilMult;
+    if (!TRAINER.on.recoil) { // [T168] NO RECOIL — the pattern adds gated (viewmodel kick below stays — the GUN kicks, the AIM doesn't)
+      p.recoilPitch += pk * d.recoilMult * (this.ads ? 0.82 : 1);
+      p.recoilYaw += yk * d.recoilMult;
+    }
     // viewmodel kick
     this.kickZ = Math.min(0.09, this.kickZ + 0.045);
     this.kickRot = Math.min(0.14, this.kickRot + 0.05);
@@ -311,7 +331,7 @@ export class WeaponSystem {
   // ---------------- grenades ----------------
   throwNade() {
     if (this.nades[this.nadeType] <= 0 || this.state === 'nade') return;
-    this.nades[this.nadeType]--;
+    if (!TRAINER.on.nades) this.nades[this.nadeType]--; // [T168] INFINITE NADES — the count never drops (trainer.hold pins 3/2 per-frame too)
     const p = this.player;
     const dir = p.forward(new THREE.Vector3());
     const pos = p.eyePos(new THREE.Vector3()).addScaledVector(dir, 0.4);
@@ -429,6 +449,10 @@ export class WeaponSystem {
     this.adsAmt += ((wantAds ? 1 : 0) - this.adsAmt) * Math.min(1, dt / Math.max(0.001, (this.def ? this.def.ads : 0.2) * 0.55));
     // sprint pose
     this.sprintAmt += ((p.sprinting && this.state === 'idle' ? 1 : 0) - this.sprintAmt) * Math.min(1, dt * 9);
+    // [T152] THE SPRINT-OUT LAW — sprint-to-fire delay (RESEARCH §3.2 comparator). sprintOut was
+    // a DEAD stat: authored on all 14 defs (0.14–0.30s), consumed nowhere. While sprinting the
+    // clock pins at 0; on exit it refills at wall-clock dt; tryFire gates on def.sprintOut.
+    this.sprintHoldT = p.sprinting ? 0 : Math.min(2, this.sprintHoldT + dt);
     // states
     if (this.state === 'swap') { this.stateT += dt; if (this.stateT >= this.stateDur) this.state = 'idle'; }
     else if (this.state === 'reload') {
@@ -466,7 +490,7 @@ export class WeaponSystem {
           FX.explosion(pos, FRAG.radius);
           this.hooks.onExplosion && this.hooks.onExplosion(pos, FRAG.radius, FRAG.dmg, null);
         }
-        this.cooking = false; this.nades[this.nadeType] = Math.max(0, this.nades[this.nadeType] - 1);
+        this.cooking = false; if (!TRAINER.on.nades) this.nades[this.nadeType] = Math.max(0, this.nades[this.nadeType] - 1); // [T168] the cook-off decrement rides the same gate
       }
     }
     this.updateProjectiles(dt);

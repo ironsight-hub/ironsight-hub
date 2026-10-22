@@ -122,8 +122,8 @@ export function trailPuff(p, color) {
 export function muzzle(pos, big = false) {
   const i = FX._fi++ % 3;
   const l = FX.flashLights[i], s = FX.flashSprites[i];
-  l.position.copy(pos); l.intensity = big ? 26 : 14;
-  s.position.copy(pos); s.material.opacity = 0.9; s.material.rotation = Math.random() * Math.PI;
+  l.position.copy(pos); l.intensity = (big ? 26 : 14) * IR_A11Y.flashCap; // [T161 R13] the strobe cap
+  s.position.copy(pos); s.material.opacity = 0.9 * IR_A11Y.flashCap; s.material.rotation = Math.random() * Math.PI;
   s.scale.setScalar(big ? 0.85 : 0.55);
 }
 export function explosion(p, radius) {
@@ -133,12 +133,19 @@ export function explosion(p, radius) {
     spawnParticle(p, dir, Math.random() < 0.5 ? 0xffb066 : 0x777777, 7);
   }
   const light = FX.flashLights[FX._fi++ % 3];
-  light.position.copy(p); light.intensity = 60; light.distance = radius * 3.2;
+  light.position.copy(p); light.intensity = 60 * IR_A11Y.flashCap; light.distance = radius * 3.2; // [T161 R13] the strobe cap
   SFXExplosion(p);
   padRumble('boom', 1); // fixed magnitude v1 (no proximity scaling — call sites have no player ref)
 }
 function SFXExplosion(p) { import('./audio.js').then(m => m.explosion(p)); }
-export function shake(amt) { FX.shakeAmp = Math.min(0.09, FX.shakeAmp + amt); }
+export function shake(amt) { FX.shakeAmp = Math.min(0.09, FX.shakeAmp + amt * (IR_A11Y.reduced ? 0.2 : 1)); }
+// [T161 R13/R15] THE A11Y CAPS — single module state, set from main.js applySettings (the
+// fan-out law): reduced = the prefers-reduced-motion analog (screen shake ×0.2, the HUD
+// gsap pulses gated at the hud.js call site); flashCap = the photosensitivity strobe
+// ceiling (multiplier on every flash light/sprite intensity — the explosion/muzzle strobe
+// surface; 1.0 = shipped behavior byte-identical).
+export const IR_A11Y = { reduced: false, flashCap: 1 };
+export function setA11y(reduced, flashCap) { IR_A11Y.reduced = !!reduced; IR_A11Y.flashCap = Math.max(0, Math.min(1, flashCap == null ? 1 : flashCap)); }
 
 // ---------- damage numbers (Apex-style cumulative stack) ----------
 export function dmgNumber(worldPos, val, { crit = false, kill = false, target = -1 } = {}) {

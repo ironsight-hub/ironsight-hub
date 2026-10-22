@@ -562,15 +562,15 @@ export function bpPassBuy(bp, cr) { // [T94] PURE pass buy (evStoreBuy idiom): {
 // rows 31-50 render + claim, free chapters 7-10 join the track (rotation wrap + dupe
 // conversion verbatim), event-store skips reach tier 31+. XP economics unchanged (per:1000;
 // §60.4's 750+25·t stays the documented OUR-CONSTANT tension).
-export const BP_CHAPTERS = 10;      // [v1.50 port T90] [m_02 verbatim]
+export const BP_CHAPTERS = 12;      // [v1.50 port T90] [m_02 verbatim]
 export const BP_TIERS_PER_CH = 5;   // [v1.50 port T90] [m_02 verbatim]
-export const BP_TIERS = 50;         // [v1.50 port T90] 10 × 5 [m_02 verbatim]
+export const BP_TIERS = 60;         // [T155 R33] 50→60 = 12 × 5 (config BP.tiers walks WITH the mirror — the sync law) · was: 10 × 5 [m_02 verbatim]
 export const BP_TIER_CR = 150;      // [v1.50 port T90] CR payout at every 5th premium tier (10 payouts/season)
 export const BP_FREE_CR = 100;      // [v1.50 port T90] free chapter-completion CR
 export const BP_DUPE_REFUND = 40;   // [v1.50 port T90] mirror of config.js ECO_DUPE_REFUND (zero-import law: quoted, never imported — keep in sync)
 export const BP_FREE_CHARMS = ['dogtag', 'luckydie', 'voidorb', 'goldshell']; // [v1.50 port T90] free-track charm rotation — real ECO_POOL ids, chapters 1-4 then repeat+convert (verified 1:1 vs the live cosmetics.js pool at T90)
 
-export const MG_ECO_POOL = [ // [v1.50 port T90] the v1.50 mirror of cosmetics.js ECO_POOL (24 rows since T93; id/label/r/d verified 1:1 against the live pool — the zero-import law forbids the import, the mirror IS the v1.50 idiom). [T93 mirror repair] the T90-c camo ladder joined ECO_POOL (20→24) after the T90 mirror froze — the 4 camo rows below close the drift; BN_CATALOG 40→44
+export const MG_ECO_POOL = [ // [v1.50 port T90] the v1.50 mirror of cosmetics.js ECO_POOL (24 rows since T93; id/label/r/d verified 1:1 against the live pool — the zero-import law forbids the import, the mirror IS the v1.50 idiom). [T93 mirror repair] the T90-c camo ladder joined ECO_POOL (20→24) after the T90 mirror froze — the 4 camo rows below close the drift; BN_CATALOG 40→44 · [T155] the R32 waves joined (24→36): the 8 finishes + 4 charms below keep the mirror 1:1
   { id: 'fieldcoat',    label: 'FIELD COAT',    r: 'common',    d: 'fin' },
   { id: 'desertfade',   label: 'DESERT FADE',   r: 'rare',      d: 'fin' },
   { id: 'rustbelt',     label: 'RUST BELT',     r: 'common',    d: 'fin' },
@@ -583,6 +583,19 @@ export const MG_ECO_POOL = [ // [v1.50 port T90] the v1.50 mirror of cosmetics.j
   { id: 'luckydie',     label: 'LUCKY DIE',     r: 'rare',      d: 'ch' },
   { id: 'voidorb',      label: 'VOID ORB',      r: 'epic',      d: 'ch' },
   { id: 'goldshell',    label: 'GOLD SHELL',    r: 'legendary', d: 'ch' },
+  // [T155 R32] the 8-deep finish wave + the 4-deep charm wave — 1:1 with cosmetics.js (id/label/r/d)
+  { id: 'ghostgrey',    label: 'GHOST GREY',    r: 'common',    d: 'fin' },
+  { id: 'topride',      label: 'TOP RIDE',      r: 'rare',      d: 'fin' },
+  { id: 'frostbite',    label: 'FROSTBITE',     r: 'rare',      d: 'fin' },
+  { id: 'nightfall',    label: 'NIGHTFALL',     r: 'epic',      d: 'fin' },
+  { id: 'bloodline',    label: 'BLOODLINE',     r: 'epic',      d: 'fin' },
+  { id: 'steelrain',    label: 'STEEL RAIN',    r: 'legendary', d: 'fin' },
+  { id: 'royalsun',     label: 'ROYAL SUN',     r: 'legendary', d: 'fin' },
+  { id: 'voidopal',     label: 'VOID OPAL',     r: 'legendary', d: 'fin' },
+  { id: 'ironround',    label: 'IRON ROUND',    r: 'common',    d: 'ch' },
+  { id: 'warcandy',     label: 'WAR CANDY',     r: 'epic',      d: 'ch' },
+  { id: 'stormtag',     label: 'STORM TAG',     r: 'epic',      d: 'ch' },
+  { id: 'suncore',      label: 'SUN CORE',      r: 'legendary', d: 'ch' },
   { id: 'ion',          label: 'ION WAKE',      r: 'common',    d: 'tr' },
   { id: 'ember',        label: 'EMBER WAKE',    r: 'rare',      d: 'tr' },
   { id: 'venom',        label: 'VENOM WAKE',    r: 'epic',      d: 'tr' },
@@ -595,6 +608,44 @@ export const MG_ECO_POOL = [ // [v1.50 port T90] the v1.50 mirror of cosmetics.j
   { id: 'camo-jungle',  label: 'JUNGLE',        r: 'epic',      d: 'fin' },
   { id: 'camo-digital', label: 'DIGITAL',       r: 'legendary', d: 'fin' },
   { id: 'camo-gold',    label: 'GOLD',          r: 'legendary', d: 'fin' },
+  { id: "olivetan", label: "OLIVE TAN", r: "common", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "slatecoat", label: "SLATE COAT", r: "common", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "emberline", label: "EMBER LINE", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "tundra", label: "TUNDRA", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "jadeband", label: "JADE BAND", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "copperhead", label: "COPPERHEAD", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "midnight2", label: "MIDNIGHT II", r: "epic", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "sunspire", label: "SUN SPIRE", r: "epic", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "toxicfold", label: "TOXIC FOLD", r: "epic", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "crimsonfold", label: "CRIMSON FOLD", r: "epic", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "cobaltring", label: "COBALT RING", r: "epic", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "duneveil", label: "DUNE VEIL", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "arcticveil", label: "ARCTIC VEIL", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "obsidianrim", label: "OBSIDIAN RIM", r: "legendary", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "royalplum", label: "ROYAL PLUM", r: "legendary", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "titaniumx", label: "TITANIUM X", r: "legendary", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "riftline", label: "RIFT LINE", r: "legendary", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "solarcrown", label: "SOLAR CROWN", r: "legendary", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "abyssglow", label: "ABYSS GLOW", r: "legendary", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "ironvein", label: "IRON VEIN", r: "epic", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "brassround", label: "BRASS ROUND", r: "common", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "slatetag", label: "SLATE TAG", r: "common", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "venomdie", label: "VENOM DIE", r: "epic", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "frosttag", label: "FROST TAG", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "emberorb", label: "EMBER ORB", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "voidshell", label: "VOID SHELL", r: "epic", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "golddie", label: "GOLD DIE", r: "legendary", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "titanorb", label: "TITAN ORB", r: "legendary", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "toxic", label: "TOXIC WAKE", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "violet", label: "VIOLET WAKE", r: "epic", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "azure", label: "AZURE WAKE", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "solar", label: "SOLAR WAKE", r: "legendary", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "wave", label: "WAVE", r: "common", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "ggs", label: "GGS", r: "common", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "threat", label: "THREAT", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "focus", label: "FOCUS", r: "rare", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "domin", label: "DOMIN", r: "epic", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
+  { id: "legend", label: "LEGEND", r: "legendary", d: undefined }, // [T161 R32] mirror wave — 1:1 with cosmetics.js ECO_POOL
 ];
 
 export const BPX_FINISHES = [ // [v1.50 port T90] authored BP-exclusive premium finishes (EN labels inline — §48.7 proper-noun law; v1.50 verbatim, 20 rows)

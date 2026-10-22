@@ -396,7 +396,18 @@ export function ops3dRig(opId, opts = {}) {
       handle._rag = ragBuild(handle, st.deadDir || null, st.knock); // [T138] the knock rides the state (config.knockFor — the damage-scaled law)
       if (handle._rag) { handle._mixer.stopAllAction(); handle._cur = null; }
     }
-    if (!st.dead && handle._rag) { ragRestore(handle._rag); handle._rag = null; handle._ragTried = false; } // respawn: the rest locals return, the mixer resumes in this same call
+    if (!st.dead && handle._rag) { // [T167] THE REVIVE ORIGIN LAW — ragRestore returns the BONE locals,
+      // but ragPose's corpse root-follow had REWRITTEN group.position (the world corpse spot →
+      // parent-local). A respawned remote/bot then carried a permanently offset skinned body over
+      // its invisible (swapped) capsule — the user's "3d body floating around the map + a
+      // transparent character on the floor firing". The tpBody contract is local (0,0,0): the
+      // origin — and the death/prone root tilt — reset with the bones. group.rotation stays: the
+      // parent polarity law (bots.js/mp.js build-time π) lives there.
+      ragRestore(handle._rag);
+      handle.group.position.set(0, 0, 0);
+      if (handle._root) handle._root.rotation.x = 0;
+      handle._rag = null; handle._ragTried = false;
+    } // respawn: rest locals + the TRUE origin return, the mixer resumes in this same call
     if (handle._rag) {
       if (st.dead && handle._rag.t < RAG_SLEEP) { ragStep(handle._rag, dt); ragPose(handle._rag, handle); handle._rag.t += Math.min(dt, 0.05); } // sleep law: past RAG_SLEEP the bones freeze where they lie — zero per-frame cost
       return;

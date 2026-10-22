@@ -79,6 +79,7 @@ function disposeWorld(scene) {
   World.destructibles = []; // §54.2 U7: [{id, col, mesh, hp, maxHp, stage, color, center}]
   World.flags = []; World.hills = []; World.sndSites = [];
   World.pickups = []; World.jumpPads = [];
+  World.gasWall = null; World.gasRing = null; // [T171] BR gas zone meshes (built per map, visible only in br)
   World.ladders = []; World.water = []; World.props = []; // [T130] the verticality/water/props registries (physics reads the first two)
   World.waterMats = []; // [T130] animated water uniforms (main loop advances them)
   World.spawnsFFA = []; World.spawnsA = []; World.spawnsB = [];
@@ -105,6 +106,7 @@ function buildFrom(scene, data) {
   makeFlags(data.flags);
   makeHills(data.hills, data.sites);
   makePickups(data.pickups);
+  makeGasZone(); // [T171] BR gas wall + next-ring meshes (built per map, hidden until br boots them)
   makeSpawns(data);
   buildWaypoints(data.nav);
   prerenderMinimap(data.map);
@@ -149,7 +151,10 @@ function addBox(cx, y0, cz, w, h, d, mat, opts = {}) {
 const strip = (cx, y, cz, w, d, mat) => addBox(cx, y, cz, w, 0.06, d, mat, { collide: false, shadow: 0 }); // emissive trim
 
 function makeSky(scene, sky) {
-  const geo = new THREE.SphereGeometry(400, 24, 12);
+  // [T170] battle-map dome law: the dome scales past 400 only when the map half-extents
+  // demand it (arena maps keep the legacy 400 exactly — zero-regression).
+  const R = Math.max(400, Math.hypot(World.data.map.halfW, World.data.map.halfD) * 1.05);
+  const geo = new THREE.SphereGeometry(R, 24, 12);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false,
     uniforms: { top: { value: new THREE.Color(sky.top) }, mid: { value: new THREE.Color(sky.mid) }, bot: { value: new THREE.Color(sky.bot) } },
@@ -164,7 +169,7 @@ function makeSky(scene, sky) {
   // stars
   const sg = new THREE.BufferGeometry(); const pts = [];
   for (let i = 0; i < 300; i++) {
-    const a = Math.random() * Math.PI * 2, e = Math.random() * Math.PI * 0.45 + 0.12, r = 380;
+    const a = Math.random() * Math.PI * 2, e = Math.random() * Math.PI * 0.45 + 0.12, r = R * 0.95;
     pts.push(Math.cos(a) * Math.cos(e) * r, Math.sin(e) * r, Math.sin(a) * Math.cos(e) * r);
   }
   sg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
@@ -174,7 +179,8 @@ function makeSky(scene, sky) {
 }
 
 function makeLights(scene, L, lamps = null) {
-  const hemi = new THREE.HemisphereLight(L.hemiSky, L.hemiGround, L.hemiI);
+  const FILL_GAIN = 1.4; // [T165] central world-light fill gain — every stage's hemiI multiplies HERE (one choke point, all 35 maps): blackened walls are the hemi FILL being too weak — fixed globally, never map-per-map
+  const hemi = new THREE.HemisphereLight(L.hemiSky, L.hemiGround, L.hemiI * FILL_GAIN);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(L.sunC, L.sunI);
   sun.position.set(...L.sunPos);
@@ -214,9 +220,66 @@ function makePerimeter(data) {
 // Authored static geometry (hub/tower/warehouse/containers/garage/cover for OUTPOST —
 // now plain data; see maps/outpost.json "blocks" + docs/MAPS.md §1).
 function buildBlocks(blocks) {
+  if (World.data && World.data.map && World.data.map.merge) { buildBlocksMerged(blocks); return; } // [T170] battle-map opt-in
   for (const b of blocks) {
     addBox(b.p[0], b.p[1], b.p[2], b.s[0], b.s[1], b.s[2], mats[b.m] || mats.wall,
       { collide: b.col !== 0, shadow: b.sh ?? 2 });
+  }
+}
+
+// [T170] battle-map render path — opt-in via map.merge:true. Blocks merge into ONE
+// BufferGeometry per (material, shadow-tier) group: ~674 blocks collapse to ~10 draw
+// calls. Collision is UNCHANGED (addBox still pushes the per-block AABBs — the merge
+// is render-only). Arena maps never set the flag and keep the legacy per-block path
+// byte-identical (zero-regression law).
+function buildBlocksMerged(blocks) {
+  const groups = new Map();
+  for (const b of blocks) {
+    const key = (b.m || 'wall') + '|' + (b.sh ?? 2);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(b);
+  }
+  for (const [key, list] of groups) {
+    const pos = [], norm = [], idx = [];
+    for (const b of list) {
+      const cx = b.p[0], y0 = b.p[1], cz = b.p[2], w = b.s[0], h = b.s[1], d = b.s[2];
+      // [T170] COLLISION PARITY LAW — the merge is render-ONLY: every solid block still
+      // pushes the exact addBox AABB (min/max + metal:false), in authored order, so the
+      // collider list is byte-identical to the legacy path's.
+      if (b.col !== 0) {
+        World.colliders.push({
+          min: new THREE.Vector3(cx - w / 2, y0, cz - d / 2),
+          max: new THREE.Vector3(cx + w / 2, y0 + h, cz + d / 2),
+          metal: false,
+        });
+      }
+      const x0 = cx - w / 2, x1 = cx + w / 2, yy0 = y0, yy1 = y0 + h, z0 = cz - d / 2, z1 = cz + d / 2;
+      // 6 faces x 4 verts, CCW outward (winding verified against BoxGeometry norms)
+      const F = [
+        [x0,yy0,z1, x1,yy0,z1, x1,yy1,z1, x0,yy1,z1, 0,0,1],
+        [x1,yy0,z0, x0,yy0,z0, x0,yy1,z0, x1,yy1,z0, 0,0,-1],
+        [x1,yy0,z1, x1,yy0,z0, x1,yy1,z0, x1,yy1,z1, 1,0,0],
+        [x0,yy0,z0, x0,yy0,z1, x0,yy1,z1, x0,yy1,z0, -1,0,0],
+        [x0,yy1,z1, x1,yy1,z1, x1,yy1,z0, x0,yy1,z0, 0,1,0],
+        [x0,yy0,z0, x1,yy0,z0, x1,yy0,z1, x0,yy0,z1, 0,-1,0],
+      ];
+      for (const f of F) {
+        const vi = pos.length / 3;
+        pos.push(f[0],f[1],f[2], f[3],f[4],f[5], f[6],f[7],f[8], f[9],f[10],f[11]);
+        norm.push(f[12],f[13],f[14], f[12],f[13],f[14], f[12],f[13],f[14], f[12],f[13],f[14]);
+        idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3));
+    g.setIndex(idx);
+    const sh = +key.split('|')[1];
+    const mesh = new THREE.Mesh(g, mats[key.split('|')[0]] || mats.wall);
+    mesh.receiveShadow = sh >= 1;
+    mesh.castShadow = sh >= 2;
+    World.group.add(mesh);
+    World.meshes.push(mesh);
   }
 }
 
@@ -444,13 +507,57 @@ function makeHills(hillList, siteList) {
 
 function makePickups(list) {
   for (const pd of list) {
-    const kind = pd.kind, x = pd.x, z = pd.z;
-    const color = kind === 'hp' ? 0x35d96b : 0x29d3ff;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.9), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.55 }));
-    m.position.set(x, 0.85, z); m.castShadow = true;
-    World.group.add(m);
-    World.pickups.push({ kind, pos: new THREE.Vector3(x, 0.85, z), active: true, mesh: m, t: 0 });
+    makeLootPickup(pd.x, pd.z, pd.kind, pd.wid);
   }
+}
+
+// [T171] one ground-loot mesh + registry entry — shared by map-authored pickups and the BR
+// loot economy (modes.js offline / the room authority online both call this). Kinds: hp (green)
+// · ammo (cyan) · arm (steel — armor plate, +shield) · wpn (amber — ground weapon, wid rides).
+export function makeLootPickup(x, z, kind, wid) {
+  const color = kind === 'hp' ? 0x35d96b : kind === 'wpn' ? 0xffb03a : kind === 'arm' ? 0x9ab6d9 : 0x29d3ff;
+  const big = kind === 'wpn' ? 1.25 : 1;
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.9 * big, 0.5 * big, 0.9 * big), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.55 }));
+  m.position.set(x, 0.85, z); m.castShadow = true;
+  World.group.add(m);
+  const pk = { kind, wid, pos: new THREE.Vector3(x, 0.85, z), active: true, mesh: m, t: 0, loot: true };
+  World.pickups.push(pk);
+  return pk;
+}
+
+// [T171] take a loot entry off the ground (pickup/death-drop cleanup) — hides + deactivates;
+// forever=true marks it DEAD (BR loot never respawns — checkPickups skips dead entries).
+export function takeLootPickup(pk, forever = false) {
+  pk.active = false; pk.mesh.visible = false;
+  if (forever) { pk.dead = true; World.group.remove(pk.mesh); }
+  else pk.t = CFG.MAP.pickups.respawn;
+}
+
+// [T171] the BR gas zone: an open-ended cylinder wall (the closing circle) + a ground ring
+// marking the NEXT closure target. Built per map, hidden until the br machine boots them.
+function makeGasZone() {
+  const wall = new THREE.Mesh(
+    new THREE.CylinderGeometry(1, 1, 90, 72, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0x8fe3ff, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })
+  );
+  wall.position.y = 45; wall.visible = false; wall.renderOrder = 5;
+  World.group.add(wall); World.gasWall = wall;
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.96, 1, 72), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.12; ring.visible = false; ring.renderOrder = 5;
+  World.group.add(ring); World.gasRing = ring;
+}
+
+// [T171] pose the gas wall + next-ring (br machine calls every frame with live circle state;
+// radius scales the unit cylinder, the ring shrinks toward tr at (tx,tz)).
+export function updateGasZone(cx, cz, r, tx, tz, tr) {
+  if (World.gasWall) { World.gasWall.position.x = cx; World.gasWall.position.z = cz; World.gasWall.scale.set(r, 1, r); World.gasWall.visible = true; }
+  if (World.gasRing) { World.gasRing.position.x = tx; World.gasRing.position.z = tz; World.gasRing.scale.set(tr, tr, 1); World.gasRing.visible = true; }
+}
+
+// [T171] hide the gas meshes (mode end / non-br maps after a br round).
+export function hideGasZone() {
+  if (World.gasWall) World.gasWall.visible = false;
+  if (World.gasRing) World.gasRing.visible = false;
 }
 
 function makeSpawns(data) {

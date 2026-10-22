@@ -1,4 +1,4 @@
-# ironsight-render-hub-t163 — Render/GitHub deploy
+# ironsight online hub — Render/GitHub deploy
 
 The Online-mode match hub (bun + socket.io). This is the file the live site dials at
 `/room`. Carries the full T157-parity hub plus:
@@ -16,9 +16,10 @@ The Online-mode match hub (bun + socket.io). This is the file the live site dial
 
 ## WHERE THINGS GO
 
-**GitHub:** unzip this archive AT THE REPO ROOT. Everything lands at
-`mini-services/ironsight-room/` (index.ts, package.json, bun.lock, accounts.json,
-career.json). Commit + push. DEPLOY.md itself is documentation — keep or delete.
+**GitHub:** the hub service lives at `mini-services/ironsight-room/` (index.ts,
+package.json, bun.lock, accounts.json, career.json); the server-side sim modules
+sit at repo-root `js/` (36) + `maps/` (36, incl. VOSKHOD). Commit + push. DEPLOY.md itself is
+documentation — keep or delete.
 
 **Render:** Web Service -> your repo, then:
 - Root Directory: `mini-services/ironsight-room`
@@ -26,7 +27,10 @@ career.json). Commit + push. DEPLOY.md itself is documentation — keep or delet
 - Build Command:  `bun install`
 - Start Command:  `bun index.ts`
 - Port: nothing to set — the code reads Render's `PORT` env first ([T160]).
-- Env vars: none required. (`IRON_PORT` remains an optional dev/probe override.)
+- Env vars: `IRON_GAME` = `../../js` — REQUIRED. The hub imports the server-side
+  sim modules from repo-root `js/` and reads `maps/` at boot; without it the boot
+  import falls back to a dev-only absolute path and crashes. (`IRON_PORT` remains
+  an optional dev/probe override.)
 
 ## VERIFY AFTER DEPLOY
 
@@ -50,4 +54,4 @@ disk at the service root. Delete both files for a re-fresh.
 ## CLIENT COUPLE
 
 The game client (HF space ideations3/ao_is) is already current (the t161 SW stamp) —
-no client deploy is needed. This hub zip is the only remaining live-site gate.
+no client deploy is needed. This repo carries the hub service (mini-services/ironsight-room/) plus its js/ + maps/ server modules; the client stays on HF ideations3/ao_is.

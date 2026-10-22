@@ -73,6 +73,10 @@ export const Maps = {
     // these rows); the host picker marks them, the offline select excludes them.
     { id: 'obsidian', name: 'OBSIDIAN', file: 'maps/obsidian.json', desc: 'mythic token-store stage (TEMPLE lineage) — geometry identical, obsidian-night re-score: ember sun / basalt colonnade dark / vault black', tk: 4000 },
     { id: 'aurora', name: 'AURORA', file: 'maps/aurora.json', desc: 'mythic token-store stage (GLACIER lineage) — geometry identical, aurora re-score: polar green vault / silver frost light / token-store exclusive', tk: 4000 },
+    // [T170] the battle-map class — 1.0 km² data-driven stage (map.far + map.merge keys).
+    // big: true = PIN/QUEUE-ONLY: excluded from casual rotation (nextForMatch), host-pickable
+    // in MP (server disk registry), and the server big-bucket queue serves it via BIG_MAP_POOL.
+    { id: 'voskhod', name: 'VOSKHOD', file: 'maps/voskhod.json', desc: 'battle map (1.0 km2) — Zarudny Plaza downtown / Seversk airfield / Koval works / Vyshgorod suburbs / Zaslav dam + Ostra reservoir (swim) / Panorama park / Dinamo bowl / Tichov farmland / Volna highlands + broadcast mast / Kamenol quarry — ring-road country, wade river, gated stadium, walkable terraced highlands', big: true },
   ],
 
   currentId: 'outpost', // id of the world currently BUILT (boot default = outpost)
@@ -118,7 +122,7 @@ export const Maps = {
   // First call: keep the boot map (first boot = outpost, byte-stable default).
   // After that: cyclic rotation that never repeats the map just played.
   nextForMatch() {
-    const pool = this.roster.filter(m => !m.tk && !m.custom); // [T110] the rotation pool stays FREE-stages — token stages are host-picked MP surfaces (offline has no entitlement ledger) · [T139 G-3] the authored stage is PIN-ONLY (never rotates)
+    const pool = this.roster.filter(m => !m.tk && !m.custom && !m.big); // [T110] the rotation pool stays FREE-stages — token stages are host-picked MP surfaces (offline has no entitlement ledger) · [T139 G-3] the authored stage is PIN-ONLY (never rotates) · [T170] battle maps are PIN/QUEUE-ONLY (too big for casual rotation; the big-bucket queue owns them)
     const n = pool.length;
     if (n <= 1) return this.currentId;
     if (this._cursor === 0) { this._cursor = 1; return this.currentId; }

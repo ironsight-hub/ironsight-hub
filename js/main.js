@@ -9,7 +9,18 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 import { CFG, DEFAULT_SETTINGS, FLASH, GG_LADDER, SND_SITES, WEAPONS, knockFor } from './config.js'; // [T138] WEAPONS + knockFor join — the kill event's weapon id → the damage-scaled ragdoll impulse (config single truth)
-import { buildWorld, setMap, World, rayAABB, segmentBlocked, applyDestDamage, applyDestNet } from './world.js';
+import { buildWorld, setMap, World, rayAABB, segmentBlocked, applyDestDamage, applyDestNet, takeLootPickup, hideGasZone } from './world.js';
+
+// [T170] battle-map camera law — a map JSON may RAISE the far plane via map.far
+// (VOSKHOD: 1400). Default maps carry no far field -> camera.far stays 500 byte-stable
+// (zero regression). Reads World.data (the actually-built map), set after every setMap.
+function applyMapCameraFar() {
+  const f = World.data && World.data.map && World.data.map.far;
+  if (f && camera && camera.far < f) {
+    camera.far = f;
+    camera.updateProjectionMatrix();
+  }
+}
 import { Maps } from './maps.js'; // T1-2: map registry/rotation (docs/MAPS.md)
 import { histPut } from './history.js'; // §52.1 S1: local match history (IDB, best-effort)
 import { applyColorVision, dailyFor, seasonOf, BP_AWARD } from './config.js'; // §52.3 S6 + §52.5 S5 (config single truth) · T89: BP award law + season key + mode trio constants
@@ -18,19 +29,20 @@ import * as achs from './achievements.js'; // [T115 G-5] the achievement single 
 import * as streaks from './streak.js'; // [T116 G-6] the login-streak single truth (pure, zero-import — the clock is INJECTED by the caller, the evDayOf law)
 import * as onboard from './onboard.js'; // T89 L10: 7-stage onboarding (scheme-pick-first + skip+reward laws)
 import { PlayerController } from './player.js';
-import { WeaponSystem, buildViewModel } from './weapons.js'; // [T121] (4) buildViewModel joins — the TPV props wear the SAME meshes the viewmodel does (one visual truth)
+import { WeaponSystem, buildViewModel, makeWeapon } from './weapons.js'; // [T121] (4) buildViewModel joins — the TPV props wear the SAME meshes the viewmodel does (one visual truth) · [T171] makeWeapon — BR ground-weapon pickup swaps the primary
 import { BotManager } from './bots.js';
 import { ops3dRig, ops3dStats } from './ops3d.js'; // [T130] the skinned operator body runtime
 import { Match } from './modes.js';
 import { HUD } from './hud.js';
 import { UI, loadSettings, saveSettings, loadLoadout, saveLoadout, loadCareer, saveCareer } from './ui.js';
 import { initInput, Input, requestLock, exitLock, actionDown, consume, consumeRelease, endFrame, resetTouchLatches, applyInputSettings } from './input.js';
+import { TRAINER } from './trainer.js'; // [T168] the FPS trainer — 7 opens the panel; the flags hook damagePlayer (god), bots.applyDamage (one-shot), weapons gates (ammo/nades/recoil/spread), CFG.PHYS (speed/jump), bots.update (freeze), career.cr floor (CR)
 import { initGamepad, pollGamepad, padRumble } from './gamepad.js';
 import { FX, initEffects, updateFX, setQuality, dmgNumber as fxNum } from './effects.js';
 import * as FXfns from './effects.js';
 const fxShake = FXfns.shake; // module fn (FX const object holds state only)
 import * as SFX from './audio.js';
-import { mp, initMP, fixedStep as mpFixedStep, frame as mpFrame, sendRespawn, onMatchStart as mpOnMatchStart, installProbe as mpInstallProbe, scoreActors, remoteActors, sendMatchStart, sendSetMode, sendSetMap, sendSetKnob, sendNade, sendStreak, sendAbility, sendReload, sendEmote, sendAuth, sendEco, sendSoc, sendQ, setAuth, serverSpawn, resolveRegion, mpPingRegion, mpLeaderboard, ensureIo, corpseHint as mpCorpseHint, sendMapReg } from './mp.js'; // §51/§52/§53: map pick + knobs + account/economy/social/queue senders join the dep list // T43 §27: region resolve/ping for initMP + UI deps; T45 §29.2: sendSetMode for the lobby mode seg; T49 §33: ladder fetch; T55 §39.4: sendEmote · [T120 S-3] ensureIo — the hub's connect-on-demand joins the dep list · [T138] corpseHint — the remote-corpses wire (killer=me legs) · [T140 G-3] sendMapReg — the custom-map registry leg
+import { mp, initMP, fixedStep as mpFixedStep, frame as mpFrame, sendRespawn, onMatchStart as mpOnMatchStart, installProbe as mpInstallProbe, scoreActors, remoteActors, sendMatchStart, sendSetMode, sendSetMap, sendSetKnob, sendNade, sendStreak, sendAbility, sendReload, sendEmote, sendAuth, sendEco, sendSoc, sendQ, setAuth, serverSpawn, resolveRegion, mpPingRegion, mpLeaderboard, ensureIo, corpseHint as mpCorpseHint, sendMapReg, sendLoot, renderLootManifest, takeLootById } from './mp.js'; // §51/§52/§53: map pick + knobs + account/economy/social/queue senders join the dep list // T43 §27: region resolve/ping for initMP + UI deps; T45 §29.2: sendSetMode for the lobby mode seg; T49 §33: ladder fetch; T55 §39.4: sendEmote · [T120 S-3] ensureIo — the hub's connect-on-demand joins the dep list · [T138] corpseHint — the remote-corpses wire (killer=me legs) · [T140 G-3] sendMapReg — the custom-map registry leg · [T171] sendLoot/renderLootManifest/takeLootById — the BR loot wire
 import { applySettings as voiceApplySettings } from './voice.js'; // [T140 G-4] the settings fan-out leg (mp.js owns the socket + the per-frame tick — no double ownership; the fn is a MODULE-level export, not a voice.* member)
 import { trailById, emoteById, finishById, charmById } from './cosmetics.js'; // T55 §39: pure defs — local wake color + emote resolve (no cycle: cosmetics imports nothing) · [T120] finishById joins — the TPV body wears the equipped finish
 import { Replay, makePlayback, unpackRecord, idbGet as replayIdbGet, idbLatest as replayIdbLatest, RF as RFBIT } from './replay.js';
@@ -42,7 +54,7 @@ const mpCrates = []; // MP-3.1 T2-10: falling supply crate visuals (server-owned
 // T2-8 §48.5: locale seed from saved settings (default-merge law) BEFORE boot-line render
 try { setLang((loadSettings() && loadSettings().lang) || 'en'); } catch (e) { /* localStorage unavailable → EN */ }
 
-// ---------- boot log ----------
+  // ---------- boot log ----------
 const bootLines = $('boot-lines');
 const LINES = [ // T2-8: t('b.*') at emit time — lang==='en' reproduces the legacy literals byte-for-byte (§48.8)
   t('b.0', { v: CFG.VERSION }),
@@ -173,6 +185,16 @@ async function bootGame() {
   settings = loadSettings();
   loadout = loadLoadout();
   career = loadCareer();
+  { // [T168] the user's CR grant — ONE-TIME +987,654 into the local wallet (the offline career face the shop's local legs spend). The server-truth CR chip (eco.cr, ui.js:573) rides the hub seed law: index.ts seeds the ADMIN account's eco with the same 987,654 on every fresh deploy — code-not-state, so it survives every wipe.
+    try {
+      if (!localStorage.getItem('ironsight.t168.cr')) {
+        localStorage.setItem('ironsight.t168.cr', '1');
+        career.cr = (career.cr | 0) + 987654;
+        saveCareer(career);
+        setTimeout(() => { if (hud) hud.announce('TRAINER GRANT', '+987,654 CR — wallet credited (T168)'); }, 1400); // the boot-toast arc (the T116 streak-law precedent)
+      }
+    } catch (e) { /* localStorage unavailable — the grant rides the session only */ }
+  }
   { const ab = achs.achUnlock(career, Date.now()); if (ab.unlocked.length) { career = ab.career; saveCareer(career); } } // [T115 G-5] boot catch-up: pre-v1.80 progress unlocks SILENTLY (no toast spam — the CAREER count reveals them; the endMatch path is the toasting one)
   // [T131] this 900 ms toast arms BEFORE the renderer (~L166) and the HUD (L407) exist — if boot
   // died in between (the WebGL-unavailable class), hud is undefined here and this callback was
@@ -182,10 +204,10 @@ async function bootGame() {
   // Input.touchMode, which only initInput() sets (was previously a dead read of the
   // module-literal default false → touch auto-quality-low never engaged).
   initInput();
-  Input.onPause = () => { if (inMatch && !paused) pause(); else if (inMatch && paused) resumeMatch(); }; // [T119] Escape TOGGLES — the desktop pause key finally exists (input.js fires it); the touch path shares the same law
+  Input.onPause = () => { if (inMatch && TRAINER.isOpen()) { TRAINER.closePanel(true); return; } if (inMatch && paused && ui._pauseSettings) { ui.closePauseSettings(); return; } if (inMatch && !paused) pause(); else if (inMatch && paused) resumeMatch(); }; // [T119] Escape TOGGLES — the desktop pause key finally exists (input.js fires it); the touch path shares the same law · [T167] ESC inside the pause-settings modal closes the MODAL (pause stays beneath); the toggle law resumes only from pause itself · [T168] ESC inside the TRAINER panel closes the TRAINER first (pause stays untouched)
   Input.onFireDown = () => { mainFireEdge = true; SFX.resumeAudio(); };
   Input.onLockChange = (locked) => {
-    if (!locked && inMatch && !paused && !Input.touchMode) pause();
+    if (!locked && inMatch && !paused && !Input.touchMode && !TRAINER.isOpen()) pause(); // [T168] the trainer's exitLock must NOT read as focus-loss — the panel keeps the sim running (classic trainer law)
   };
   // T44 §28.1: persistent player id — generated ONCE, reused forever. Bearer device identity
   // (spoofable by design until T2-6; §28.6 honest scope). Absent/blocked localStorage = anonymous session.
@@ -221,6 +243,7 @@ async function bootGame() {
   scene.add(camera);
 
   await buildWorld(scene); // T1-2: data-driven (maps/outpost.json on first boot — behavior-stable default)
+  applyMapCameraFar(); // [T170] no-op for arena maps (no far field)
   Maps.preload(); // warm the rotation roster in the background (fetch only, no rebuild)
   Maps.init(); // [T139 G-3] the authored custom stage joins the roster (LS-gated) BEFORE any pick/pin scan
 
@@ -245,7 +268,7 @@ async function bootGame() {
       priv: wantPriv, // T45 §29.3: private create rides initMP → join payload (false = key dropped)
       code: wantCode || undefined, // T45 §29.3: join-by-code rides initMP (absent = key dropped = pre-T45 bytes)
       loadout: () => loadout, // MP-3.1: ability binding rides join
-      onJoined: (d) => { if (d && d.room) mpRoomId = d.room; if (d && d.code) hud.announce(t('a.privLobby'), t('a.privLobbyS', { code: d.code, link: location.pathname + '?mp=1&code=' + d.code })); if (mp.spec && d && d.spawn) { specSeed.set(d.spawn.x, d.spawn.y, d.spawn.z); specSeedOk = true; hud.spectateMode(true); } if (d && d.profile && uiReady) ui.setMpProfile(d.profile); if (d && d.ranked && uiReady) ui.setMpRanked(d.ranked); mpOnMatchStart(); if (mpAuto && !d.live && !mp.spec) startMatch('ffa', ui.difficulty); }, // T41 §25.1: ack spawn = camera seed; T44 §28.3: server-truth profile → identity corner; T45 §29.3: real room id + private invite announce; T46 §30.6: ranked view → corner RANK row · [T141] the queue's round: a lobby join (d.live=false — the server-truth flag) takes the FULL local entry — startMatch IS the DEPLOY path (inMatch + ui.hideAll + hud + spawn + the server startMatch emit) — THE DIFFICULTY RIDES (every other caller passes it; undefined killed match.start before the server emit, live-caught) — a live/countdown room just rides it: QUICKPLAY lands IN the round, never on a menu
+      onJoined: (d) => { if (d && d.room) mpRoomId = d.room; if (d && d.code) hud.announce(t('a.privLobby'), t('a.privLobbyS', { code: d.code, link: location.pathname + '?mp=1&code=' + d.code })); if (mp.spec && d && d.spawn) { specSeed.set(d.spawn.x, d.spawn.y, d.spawn.z); specSeedOk = true; hud.spectateMode(true); } if (d && d.profile && uiReady) ui.setMpProfile(d.profile); if (d && d.ranked && uiReady) ui.setMpRanked(d.ranked); mpOnMatchStart(); if (mpAuto && !mp.spec) { if (d.live) startMatch(d.md || 'ffa', ui.difficulty, true); else if (uiReady) ui.show('page-private'); } }, // T41 §25.1: ack spawn = camera seed; T44 §28.3: server-truth profile → identity corner; T45 §29.3: real room id + private invite announce; T46 §30.6: ranked view → corner RANK row · [T157] THE PARITY CHAIN (what game mode > what game type > lobby > THEN game): the ack carries SERVER-TRUTH live + md (the T157 hub ROOM-STATE LAW — the old ack never did, so `!d.live` was always true and this branch self-started hardcoded ffa even mid-live tdm). LIVE/countdown room → port INTO the round with the SERVER's mode (fromServer=true: the round is already owned — no startMatch re-emit, the host-gate + §34.1 rate cap stay untouched). IDLE lobby → land on the LOBBY FACE (page-private: roster + mode + map + rules + DEPLOY) — the round starts FROM the lobby (any-member §34.1 law), never a blind in-match dump
       // MP-2 combat FX (server verdicts → presentation; main.js owns hud/match/SFX)
       onKill: (k) => {
         const vv = { name: k.vn };
@@ -290,10 +313,13 @@ async function bootGame() {
         vib('hit'); // T99 v1.64: MP mirror twin — FX-only, hp math stays server-side
       },
       onMatch: (d) => { // MP-3: server lifecycle → announcements (limits/scores stay server-side)
-        if (d.ev === 'start') { hud.announce(t('a.matchStart'), t('a.matchStartS', { md: d.md.toUpperCase(), room: mpRoomId || CFG.MP.room })); mpCareer0 = { s: player.shotsFired || 0, h: player.shotsHit || 0 }; } // T45 §29.3: real room id (private code visible at match start)
+        if (d.ev === 'start') { hud.announce(t('a.matchStart'), t('a.matchStartS', { md: d.md.toUpperCase(), room: mpRoomId || CFG.MP.room })); mpCareer0 = { s: player.shotsFired || 0, h: player.shotsHit || 0 }; if (!inMatch && mp.ready && !mp.spec) startMatch(d.md || 'ffa', ui.difficulty, true); } // T45 §29.3: real room id (private code visible at match start) · [T157] THE LOBBY-RIDER LAW — a joined, not-yet-deployed player (in the LOBBY face, or a menu) deploys when the round actually starts: the parameter chain's THEN-game step is server-driven (the starter's own ev:'start' arrives inMatch → the !inMatch guard skips it; the rider's startMatch runs fromServer=true — the server ALREADY started, no re-emit). Old servers send no md → ffa fallback byte-honest
         else if (d.ev === 'lobbyMode') hud.announce(t('a.lobbyMode'), t('a.lobbyModeS', { md: (d.md || '').toUpperCase(), by: d.by ? t('a.lobbyModeBy', { by: d.by }) : '' })); // T45 §29.2: host lobby pick broadcast
         else if (d.ev === 'lobbyMap') hud.announce('MAP SELECTED', ((Maps.nameOf(d.map) || d.map || '') + '').toUpperCase() + (d.by ? ' — by ' + d.by : '')); // §51.3: host map pick broadcast (EN literal — i18n keys pending, documented residual)
         else if (d.ev === 'lobbyKnobs') hud.announce('HOST RULES UPDATED', 'score ' + ((d.knobs && d.knobs.sl) || 'default') + ' · time ' + ((d.knobs && d.knobs.tl) ? Math.round(d.knobs.tl / 60) + ' min' : 'default')); // §52.4: knob broadcast (EN literal residual)
+        else if (d.ev === 'brLoot') renderLootManifest(d.loot); // [T171] the room's ground-loot manifest → client meshes
+        else if (d.ev === 'lootNew') renderLootManifest([d.it]); // [T171] BR death-drop delta
+        else if (d.ev === 'lootTake') takeLootById(d.id); // [T171] someone (incl. me) took it — hide everywhere
         else if (d.ev === 'live') { hud.announce(t('a.live'), ''); if (!mpCareer0) mpCareer0 = { s: player.shotsFired || 0, h: player.shotsHit || 0 }; }
         else if (d.ev === 'flag') hud.announce(d.owner === mp.myTeam ? t('a.flagCap', { id: d.id }) : t('a.flagLost', { id: d.id }), d.owner === mp.myTeam ? t('a.flagCapS', { xp: CFG.XP.capture }) : '');
         // --- T1-1 (SS22): hill / round / bomb / tier events ---
@@ -377,8 +403,11 @@ async function bootGame() {
         while (mpCrates.length) { scene.remove(mpCrates.pop()); }
         if (d.mine) { hud.banner(0, 'SUPPLY DROP SECURED'); refillLoadout(); SFX.pickup(null, 0); }
       },
-      onStreakEv: (d) => { // T2-10: UAV/AIRSTRIKE announcements (modes.js:246/255 verbatim strings)
-        if (d.i === 0) { hud.announce(t('a.uav'), t('a.uavS')); SFX.pickup(null, 0); }
+      onStreakEv: (d) => { // T2-10: UAV/AIRSTRIKE announcements (modes.js:246/255 verbatim strings) — [T155 R6] the def name rides d.nm: default-slot defs keep the i-keys, non-default defs announce their own name (the WEAPONS proper-noun law)
+        const loArr = (Array.isArray(loadout && loadout.streaks) && loadout.streaks.length === 3) ? loadout.streaks : [0, 1, 2];
+        const evDef = (d.i >= 0 && d.i <= 2) ? CFG.STREAKS[loArr[d.i]] : null;
+        if (d.nm && evDef && evDef.name !== d.nm) { hud.announce(d.nm, d.nm + ' ONLINE'); SFX.announceSting(1); }
+        else if (d.i === 0) { hud.announce(t('a.uav'), t('a.uavS')); SFX.pickup(null, 0); }
         else if (d.i === 1) { hud.announce(t('a.strike'), t('a.strikeS')); SFX.announceSting(1); }
       },
       onMatchErr: (d) => hud.announce(t('a.matchErr'), d.why === 'notHost' ? t('a.errHost') : d.why === 'sndNoRespawn' ? t('a.errSnd') : t('a.errGeneric')), // T2-12 + SS22.3
@@ -391,14 +420,14 @@ async function bootGame() {
         if (d.priv && d.code) hud.announce(t('a.privCode', { code: d.code }), d.meHost ? t('a.privHostS') : t('a.privGuestS')); // T45 §29.3: private lobby code visibility
         else if (d.meHost) hud.announce(t('a.lobbyHost'), t('a.lobbyHostS'));
         else if (d.hostN) hud.announce(t('a.lobby'), t('a.lobbyHostN', { n: d.hostN }));
-        if (d.map && d.map !== Maps.currentId && d.map !== 'custom') setMap(scene, d.map).catch((e) => console.warn('aps] roster rebuild to ' + d.map + ' failed, keeping ' + Maps.currentId)); // §51.3: rebuild on host map change (rotation-failure law) · [T140 G-3] 'custom' is EXCLUDED here — mp.js owns the wire-map path (host LS original / joiner mapdata pull → onWireMap)
-        if (uiReady) ui.setMpLobby({ priv: !!d.priv, code: d.code || null, md: d.md || null, map: d.map || null, knobs: d.knobs || null, meHost: !!d.meHost }); // T45 §29.3 + §51.3/§52.4: additive map + knobs (Task 73 supersession)
+        if (d.map && d.map !== Maps.currentId && d.map !== 'custom') setMap(scene, d.map).then(applyMapCameraFar).catch((e) => console.warn('aps] roster rebuild to ' + d.map + ' failed, keeping ' + Maps.currentId)); // §51.3: rebuild on host map change (rotation-failure law) · [T140 G-3] 'custom' is EXCLUDED here — mp.js owns the wire-map path (host LS original / joiner mapdata pull → onWireMap)
+        if (uiReady) ui.setMpLobby({ priv: !!d.priv, code: d.code || null, md: d.md || null, map: d.map || null, knobs: d.knobs || null, meHost: !!d.meHost, ps: d.ps || [], specs: d.specs || 0 }); // T45 §29.3 + §51.3/§52.4: additive map + knobs (Task 73 supersession) · [T157] ps + specs ride — the LOBBY face renders the player list (names + clan tags + the spectator count); the roster chain's player rows were dropped at this seam before, so the lobby never showed who was in it
       },
       onCareer: (d) => { if (uiReady) ui.careerAward(d); }, // T44 §28.3: per-socket XP award at match end → results screen
       onRanked: (d) => { if (uiReady) ui.rankedAward(d); }, // T46 §30.6: per-socket ranked award (ranked matches only) → results RP line + corner catch-up
       onEmote: (d) => { if (inMatch) hud.announce(d.text, d.n); }, // T55 §39.4: remote taunt → announce(text, name) — announce-based surface (§39 honest scope)
       playerPos: () => (player && player.pos ? player.pos : null), // [T140 G-4] the voice listener env — the local eye feeds the proximity panner math (mp.js polls per frame)
-      onWireMap: (id) => { if (Maps.currentId !== id) setMap(scene, id).catch((e) => console.warn('aps] wire-map rebuild to ' + id + ' failed', e && e.message)); }, // [T140 G-3] the custom-map rebuild AFTER the registered data landed (mp.js ordering law)
+      onWireMap: (id) => { if (Maps.currentId !== id) setMap(scene, id).then(applyMapCameraFar).catch((e) => console.warn('aps] wire-map rebuild to ' + id + ' failed', e && e.message)); }, // [T140 G-3] the custom-map rebuild AFTER the registered data landed (mp.js ordering law)
       onJoinErr: (d) => hud.announce('JOIN FAILED', String((d && d.why) || '?').toUpperCase()), // [T140] the honest join face (flood/code/noRoom/powfail — EN literal, the §51.3 documented-residual precedent)
     });
     mpInstallProbe();
@@ -439,10 +468,20 @@ function mpOnTier(t, wid) {
     },
   });
 
+  TRAINER.init({ // [T168] the trainer wakes with the sim — deps are closures (player/career/ui resolve at call time)
+    inMatch: () => inMatch,
+    announce: (a, b) => { if (hud) hud.announce(a, b); },
+    requestLock: () => { try { requestLock(); } catch (e) {} },
+    exitLock: () => { try { exitLock(); } catch (e) {} },
+    wallet: () => (career && (career.cr | 0)) || 0,
+    walletRefresh: () => { try { if (uiReady && ui) ui.refreshCareer(); } catch (e) {} }, // the CR page/strip mirror (ui.js:1561 refreshCareer)
+  });
+
   match = new Match({
     player, bots, weapons,
     camera: () => camera, scene: () => scene, settings: () => settings,
     loadout: () => loadout, state: () => match.state, difficulty: () => ui.difficulty,
+    streakLoadout: (loadout && Array.isArray(loadout.streaks) && loadout.streaks.length === 3) ? loadout.streaks : [0, 1, 2], // [T155 R6] slot→STREAKS-def equip (the loadout single truth; default = the pre-T155 slots verbatim)
     mp: () => CFG.MP.enabled, // MP-3.1: modes.js MP-lite gate (server owns time/DOM/win checks)
     onKill: (k, v, h, w) => { if (k && k.isPlayer && h) player.headshots = (player.headshots || 0) + 1; vib('kill'); match.registerKill(k, v, h, w); onbEvent('onb-objective', true); }, // T89: headshot stat + haptic kill; objective event SOFT here (ping/cap are the real sites — see onbEvent soft law)
     announce: (t, s) => hud.announce(t, s),
@@ -478,6 +517,7 @@ function mpOnTier(t, wid) {
     mpLeaderboard, // T49 §33: SEASON LADDER row — injected, ui.js stays decoupled from the net stack
     ensureIo: (s, cb) => ensureIo(s, cb), // [T120 S-3] the hub's connect-on-demand — injected, ui.js stays decoupled from the net stack
     mp: () => CFG.MP.enabled, // T45 §29.3: PRIVATE row gate (offline menu byte-identical)
+    mpState: () => ({ joined: mp.joined, ready: mp.ready, inLive: mp.inLiveMatch }), // [T157] the lobby face reads connection/live truth (CONNECTING vs LOBBY status; DEPLOY hides on a live room — the port path owns that case)
     setMode: (m) => sendSetMode(m), // T45 §29.3: LOBBY MODE seg — injected, ui.js stays decoupled from the net stack
     setRoomMap: (id) => { // §51.3: LOBBY MAP host pick · [T140 G-3] custom = mapreg FIRST (the registered stage), then setMap — the honest order the server enforces
       if (id === 'custom') { const ce = Maps.customEntry(); if (ce && ce.custom) sendMapReg(ce.custom); }
@@ -495,12 +535,12 @@ function mpOnTier(t, wid) {
   });
   // §53.7: AUTH hydration (stays-signed-in) + response routing (persist on register/login)
   const savedAuth = JSON.parse(localStorage.getItem('ironsight.auth.v1') || 'null');
-  if (savedAuth && savedAuth.tok) setAuth(savedAuth);
+  if (savedAuth && savedAuth.tok) { setAuth(savedAuth); ui.auth = savedAuth; } // [T166] the bands + gate hydrate from the persisted session immediately (name + tok + disc) — the server acks refresh them on the first live op
   mp.onAuth = (d) => {
     if (!d) return;
     if ((d.op === 'register' || d.op === 'login') && d.tok) {
       setAuth(d);
-      try { localStorage.setItem('ironsight.auth.v1', JSON.stringify({ name: d.name, tok: d.tok })); } catch (e) {}
+      try { localStorage.setItem('ironsight.auth.v1', JSON.stringify({ name: d.name, tok: d.tok, disc: d.disc })); } catch (e) {} // [T166] the pilot ID persists with the session
       if (uiReady && ui.onAuth) ui.onAuth(d);
     } else if (d.op === 'me' && d.tok) { setAuth(d); if (uiReady && ui.onAuth) ui.onAuth(d); }
     else if (d.op === 'logout') { setAuth(null); try { localStorage.removeItem('ironsight.auth.v1'); } catch (e) {} if (uiReady && ui.onAuth) ui.onAuth(d); }
@@ -508,7 +548,7 @@ function mpOnTier(t, wid) {
   };
   mp.onEco = (d) => { if (uiReady && ui.onEco) ui.onEco(d); }; // §53.2: ecoState pushes + op acks
   mp.onSoc = (d) => { if (uiReady && ui.onSoc) ui.onSoc(d); if (d && d.op === 'report' && !d.err) hud.announce(t('rep.done'), d.dup ? t('rep.dup') : ''); else if (d && d.op === 'report' && d.err) hud.announce(t('rep.fail'), t('rep.e.' + String(d.err)) || String(d.err)); }; // §53.3: social state pushes + [T118 G-8] the report ack arc (the T116 boot-sweep toast precedent) · [T122 G-8] the server errs map readable (rep.e.* — the T121 onAuth err-map idiom), raw token stays the fallback
-  mp.onQueue = (d) => { if (d && d.room && (d.op === 'pop' || d.op === 'quick')) location.href = location.pathname + '?mp=1&room=' + d.room + '&auto=1'; if (mp.onQueueUi) mp.onQueueUi(d); }; // §53.4: pop → existing join flow · [T120 S-3] the quick ack joins the same way (the server answers quick SYNCHRONOUSLY with the room id — the room id IS the join contract) + the hub mirror rides every ack · [T141] auto=1 — the assigned lobby self-starts (QUICKPLAY = into the round)
+  mp.onQueue = (d) => { if (d && d.room && (d.op === 'pop' || d.op === 'quick')) location.href = location.pathname + '?mp=1&room=' + d.room + '&auto=1' + (d.mode ? '&md=' + d.mode : ''); if (mp.onQueueUi) mp.onQueueUi(d); }; // §53.4: pop → existing join flow · [T120 S-3] the quick ack joins the same way (the server answers quick SYNCHRONOUSLY with the room id — the room id IS the join contract) + the hub mirror rides every ack · [T141] auto=1 — the assigned lobby is the join contract · [T157] md rides the redirect — the lobby face shows the queue's mode DURING the boot/dial window (the mode > type > lobby > game chain starts at the click, not at the ack)
   mp.onQueueUi = (d) => { if (uiReady && ui.queueStatus) ui.queueStatus(d); }; // [T120 S-3] queue acks/errors → the hub status line (rank position + the honest error faces)
   // §52.2 S3 first-boot law + v1.55 T89 L10 upgrade: staged onboarding (onboard.js single
   // truth) — active stages show page-onboard in STAGED form; the §52.2 primer content stays
@@ -517,8 +557,15 @@ function mpOnTier(t, wid) {
   if (!returning) returning = !!localStorage.getItem('ironsight.onboarded.v1'); // OR the onboarded flag (first-run primer seen)
   if (!returning) returning = !onboard.onbActive(onboard.onbState()); // T89: migrated/complete tutorial state counts too
   ui.showLoading(); ui.hideLoading();
-  if (returning) ui.show('page-main');
+  // [T166] THE BOOT ACCOUNT GATE — the CoD law: the game OPENS on the account face. A live
+  // saved session skips it (the stays-signed-in law [j_02] — zero-friction return); everyone
+  // else lands on page-account (the T122 face + the T166 first-pilot card: one-click ADMIN,
+  // register, or continue offline). First visits finish onboarding first — onbFinish() routes
+  // them into the same gate (the tutorial → account → menu order).
+  const hasSession = !!(savedAuth && savedAuth.tok);
+  if (returning) ui.show(hasSession ? 'page-main' : 'page-account');
   else ui.show('page-onboard'); // first visit → staged onboarding (renderOnboard drives it)
+  if (CFG.MP.enabled && CFG.MP.room && new URLSearchParams(location.search).has('auto') && !new URLSearchParams(location.search).has('spec')) ui.show('page-private'); // [T157] THE CONNECTING FACE — an auto queue boot (?mp=1&room=X&auto=1) lands on the LOBBY face immediately, not the main menu: the "reload → main page → wait → in-match dump" the user reported becomes reload → LOBBY (CONNECTING status) → roster fills → deploy/game. The joined ack re-renders the same page with live roster truth
   uiReady = true; // T44 §28.4: async MP callbacks (onJoined profile / onCareer) may target ui from here on
 
   // gamepad layer [W3C standard mapping — js/gamepad.js header]
@@ -543,7 +590,13 @@ function mpOnTier(t, wid) {
     },
   });
 
-  player.hooks.fallDamage = (d) => damagePlayer(d, { name: 'GRAVITY' }, false, 'FALL');
+  player.hooks.fallDamage = (d) => { if (player.dropT > 0) return; damagePlayer(d, { name: 'GRAVITY' }, false, 'FALL'); }; // [T171] the BR insertion drop never reads as a fall
+  player.hooks.dropGlide = (p, ev) => { // [T171] BR insertion: capped fall + forward glide feel; landing/water disarms the drop (a reservoir splash must NOT leave fall damage disabled for the match)
+    if (p.dropT > 0) {
+      p.vel.y = Math.max(p.vel.y, CFG.MODES.br.dropFall);
+      if (ev.land || p.swimming || p.wading) p.dropT = 0;
+    }
+  };
   player.hooks.pickup = () => checkPickups();
   // [T119] TPV (issue 4) — the over-the-shoulder body rig + the boom obstruction hook.
   // Primitives rig (Lambert, team-neutral), visible ONLY in third-person; the viewmodel
@@ -611,6 +664,7 @@ function mpOnTier(t, wid) {
   // transforms through the SAME remoteActors the spectate rig cycles (mp.js:586).
   window.__IR = {
     CFG, Input, player, weapons, bots, match, world: World, hud, settings, ui, requestLock, damagePlayer, inMatch: () => inMatch, isPaused: () => paused,
+    trainer: TRAINER, // [T168] the trainer joins the probe surface (the T121 remotes-read precedent — power users + acceptance probes script the toggles)
     remotes: () => remoteActors(),
     ops3d: () => ops3dStats(), // [T130] the per-rig clip-coverage record (the honest audit: found vs missing per operator)
     touchAssist: () => ({ err: Input.touchMode ? touchAssistCone() : -1, pos: assistPos, autoFire: Input.autoFireOn }),
@@ -845,6 +899,16 @@ function applySettings() {
     weapons.setFovScale(settings.fov);
     hud.buildCrosshair({ ...settings.ch }); // G-1 (v1.78): style normalization lives in hud.renderCrosshairInto (5 known shapes; unknown → 'cross')
     SFX.applyVolumes?.();
+    // [T161 R13/R15] the a11y fan-out leg — the strobe cap + the shake gate (effects module
+    // state), the hud a11y surfaces (subtitles/reduced-motion), the audio a11y (mono/pitch),
+    // the body theme + scale. Boot-armor covers it like every peripheral leg.
+    try {
+      FXfns.setA11y(settings.reducedMotion, settings.flashCap > 0 ? 1 - settings.flashCap : 1);
+      hud.setSubtitles(!!settings.subtitles); hud.setReducedMotion(!!settings.reducedMotion);
+      SFX.setMono?.(!!settings.mono); SFX.setHitPitch?.(settings.hitSound === 'low' ? 0.7 : settings.hitSound === 'high' ? 1.35 : 1);
+      document.body.classList.toggle('ir-hc', !!settings.highContrast);
+      document.body.style.setProperty('--ir-ui-scale', String(settings.uiScale || 1));
+    } catch (e2) { console.warn('[a11y] leg degraded (game continues):', e2 && e2.message); }
     voiceApplySettings(settings); // [T140 G-4] the fan-out leg — voiceOn/volVoice live-apply (boot-armor protects it like every peripheral leg)
     const q = CFG.QUALITY[settings.quality];
     setQuality(q);
@@ -879,7 +943,7 @@ function onResize() {
 }
 
 // ---------------- match flow ----------------
-async function startMatch(mode, diff) {
+async function startMatch(mode, diff, fromServer) { // [T157] fromServer — the deploy was SERVER-DRIVEN (live-port onJoined / the lobby-rider ev:'start'): the round is already owned, so sendMatchStart is SKIPPED (a re-emit mid-countdown either churns the countdown as host or is dropped by the §34.1 rate cap — both wasteful); local deploy + spawn sync still run
   // --- T1-2 map rotation (offline only) ---
   // MP PIN: the authoritative room's objective tables (FLAG_DEFS/HP_HILLS/SND_SITES
   // mirrors, mini-services/ironsight-room/index.ts) and its collision world
@@ -887,12 +951,12 @@ async function startMatch(mode, diff) {
   // never rotates. Map-aware server objectives = logged residual (worklog Task 37-b).
   if (!CFG.MP.enabled) {
     const pick = settings.mapSelect; // §51.1: the saved map pin ('any' = rotation)
-    const pinned = pick && pick !== 'any' && Maps.roster.some(m => m.id === pick);
-    const want = pinned ? pick : Maps.nextForMatch(); // §51.1: pinned-pick law — rotation only for 'any'
+    const pinned = mode === 'br' || (pick && pick !== 'any' && Maps.roster.some(m => m.id === pick)); // [T171] BR pins the battle map regardless of the saved pin (reads the PARAM — match.mode is still the previous mode here)
+    const want = mode === 'br' ? 'voskhod' : pinned ? pick : Maps.nextForMatch(); // §51.1: pinned-pick law — rotation only for 'any'
     if (want !== Maps.currentId) {
       // A failed rotation build must never kill match start — keep the current world.
       // (Maps.load only rejects when BOTH the map file and the outpost fallback are gone.)
-      try { await setMap(scene, want); } // no-op fetch path: roster preloaded at boot
+      try { await setMap(scene, want); applyMapCameraFar(); } // no-op fetch path: roster preloaded at boot
       catch (e) { console.warn('[maps] rotation to ' + want + ' failed, keeping ' + Maps.currentId, e && e.message); }
     }
   }
@@ -917,10 +981,10 @@ async function startMatch(mode, diff) {
   weapons.setLoadout(loadout, settings);
   match.start(mode, diff);
   respawnPlayer(true);
-  if (CFG.MP.enabled) { bots.clear(); mpOnMatchStart(); sendRespawn(player.pos); sendMatchStart(mode); } // MP sandbox: no bots, sync spawn + server match (MP-3)
+  if (CFG.MP.enabled) { bots.clear(); mpOnMatchStart(); sendRespawn(player.pos); if (!fromServer) sendMatchStart(mode); } // MP sandbox: no bots, sync spawn + server match (MP-3) · [T157] server-driven deploys skip the re-emit (the fromServer law)
   hud.showDeath(false);
   if (mode === 'practice') { match.practice.count = 3; }
-  hud.announce(mode === 'practice' ? t('m.modePrac') : t('a.startTitle'), CFG.MODES[mode] ? (mode === 'dom' ? t('a.domS') : mode === 'tdm' ? t('a.tdmS') : mode === 'ct' ? t('a.ctS') : mode === 'ffa' ? t('a.ffaS') : mode === 'hp' ? t('a.hpS') : mode === 'kc' ? t('a.kcS') : mode === 'snd' ? t('a.sndS') : mode === 'gg' ? t('a.ggS') : mode === 'gf' ? t('a.gfS') : mode === 'inf' ? t('a.infS') : mode === 'ctl' ? t('a.ctlS') : t('a.pracS')) : '');
+  hud.announce(mode === 'practice' ? t('m.modePrac') : t('a.startTitle'), CFG.MODES[mode] ? (mode === 'dom' ? t('a.domS') : mode === 'tdm' ? t('a.tdmS') : mode === 'ct' ? t('a.ctS') : mode === 'ffa' ? t('a.ffaS') : mode === 'hp' ? t('a.hpS') : mode === 'kc' ? t('a.kcS') : mode === 'snd' ? t('a.sndS') : mode === 'gg' ? t('a.ggS') : mode === 'gf' ? t('a.gfS') : mode === 'inf' ? t('a.infS') : mode === 'ctl' ? t('a.ctlS') : mode === 'br' ? t('a.brS') : t('a.pracS')) : '');
   if (!Input.touchMode) requestLock();
   SFX.setCombatIntensity(0.2);
 }
@@ -928,6 +992,7 @@ function quitMatch() {
   inMatch = false; paused = false; mpResultsUp = false; // [T120] a manual exit disarms the lobby auto-dismiss
   releaseMobileImmersive(); // [v1.50 port T90] §60.2 M6
   exitLock();
+  hideGasZone(); World.brZone = null; // [T171] gas meshes down on exit
   $('hud').classList.add('hidden');
   $('touch-ui').classList.add('hidden');
   bots.clear();
@@ -1050,6 +1115,7 @@ function touchAssistSlow() { // L12 magnetism: near-target cone slowdown on touc
 
 function endMatch(res) {
   inMatch = false; paused = false;
+  TRAINER.closePanel(false); // [T168] the panel never floats over the results/menu faces (relock skipped — the locker is already gone with the round)
   releaseMobileImmersive(); // [v1.50 port T90] §60.2 M6
   exitLock();
   $('hud').classList.add('hidden'); // [T119] the round-end face is clean — HUD (minimap/timer/feed) never rides the killcam/results (issue-6 live evidence)
@@ -1100,6 +1166,7 @@ function respawnPlayer(instant = false) {
     if (score > bestScore) { bestScore = score; best = sp; }
   }
   player.pos.copy(best); player.pos.y += 0.05;
+  if (match.mode === 'br' && !CFG.MP.enabled) { player.pos.y = CFG.MODES.br.drop; player.dropT = 1; } // [T171] air-drop insertion — 115 m up, glide-capped (dropGlide), landing disarms the fall guard (offline truth; MP drops ride the server spawn)
   player.vel.set(0, 0, 0);
   player.yaw = Math.atan2(-(0 - player.pos.x), -(0 - player.pos.z));
   player.pitch = 0; player.roll = 0;
@@ -1144,9 +1211,11 @@ function routeDamageToBot(target, dmg, head, attacker, wdef) {
 }
 function damagePlayer(dmg, from, head, wpnName) {
   if (CFG.MP.enabled) return; // MP: server-authoritative combat (Task 28's mp.js dmg/kill events drive FX; hp mirrors via snapshots)
+  if (TRAINER.on.god) return; // [T168] GOD MODE — the local sim's ONLY inbound damage choke (bots' onPlayerHit, fall-damage hook, area damage all funnel here); MP stays server-owned (the panel says so on the row)
   const p = player;
   if (!p.alive || match.state !== 'live') return;
   if (p.spawnProt > 0) return;
+  if (p.juggT > 0) dmg *= (p.juggCut || 1); // [T161 R6] the juggernaut suit's damage-taken law — the cut rides BEFORE shield math (the armor plate then absorbs the reduced hit)
   p.lastDamageT = 0;
   dmgEvents.push(performance.now() / 1000);
   let dmgLeft = dmg;
@@ -1219,21 +1288,33 @@ function applyBlind(strength, cfg) {
 }
 
 function checkPickups() {
+  const consume = (pk) => { if (pk.lootId && CFG.MP.enabled) sendLoot(pk.lootId); if (pk.loot || match.mode === 'br') takeLootPickup(pk, true); else { pk.active = false; pk.mesh.visible = false; pk.t = CFG.MAP.pickups.respawn; } }; // [T171] loot/BR pickups never respawn; map pickups ride the 20 s clock; MP loot informs the room
   for (const pk of World.pickups) {
+    if (pk.dead) continue; // [T171] BR loot already taken
     if (!pk.active) { pk.t -= 1 / 60; if (pk.t <= 0) { pk.active = true; pk.mesh.visible = true; } continue; }
     const d = Math.hypot(player.pos.x - pk.pos.x, player.pos.z - pk.pos.z);
     if (d < 1.2 && Math.abs(player.pos.y - pk.pos.y) < 1.6) {
       if (pk.kind === 'hp' && player.hp < 100) {
         player.hp = Math.min(100, player.hp + CFG.MAP.pickups.healthAmt);
-        pk.active = false; pk.mesh.visible = false; pk.t = CFG.MAP.pickups.respawn;
+        consume(pk);
         SFX.pickup(null, 0); hud.banner(0, '+50 HEALTH');
       } else if (pk.kind === 'ammo') {
         const w = weapons.w;
         if (w && w.reserve < w.def.reserve) {
           w.reserve = Math.min(w.def.reserve, w.reserve + w.def.mag * CFG.MAP.pickups.ammoMagMult);
-          pk.active = false; pk.mesh.visible = false; pk.t = CFG.MAP.pickups.respawn;
+          consume(pk);
           SFX.pickup(null, 1); hud.banner(0, 'AMMUNITION');
         }
+      } else if (pk.kind === 'arm' && player.shield < CFG.HEALTH.shieldMax) { // [T171] armor plate — the shield layer tops up
+        player.shield = Math.min(CFG.HEALTH.shieldMax, player.shield + 50);
+        consume(pk);
+        SFX.pickup(null, 0); hud.banner(0, 'ARMOR PLATE');
+      } else if (pk.kind === 'wpn' && pk.wid && (!weapons.w || weapons.w.def.id !== pk.wid)) { // [T171] ground weapon — swaps the primary, full ammo
+        weapons.slotWeapons[0] = makeWeapon(pk.wid, []);
+        weapons.equip(0, true);
+        const nw = weapons.w; if (nw) nw.reserve = nw.def.reserve;
+        consume(pk);
+        SFX.pickup(null, 1); hud.banner(0, nw ? nw.def.name : 'WEAPON');
       }
     }
   }
@@ -1295,6 +1376,10 @@ function loop() {
     if (!_onbLooked && inMatch && (Math.abs(Input.lookDX) + Math.abs(Input.lookDY) > 60)) { _onbLooked = true; onbEvent('onb-look'); }
 
     // ---- weapon input ----
+    // [T168] the trainer's per-frame holds ride the SAME clock the spenders run on: ammo/nades
+    // pin BEFORE tryFire reads them, the CR floor holds in menus too (inside hold()).
+    TRAINER.hold(weapons, career, saveCareer);
+    if (consume('trainer')) TRAINER.togglePanel(); // [T168] [7] — the trainer toggle rides OUTSIDE the dead-hands gate (the panel opens while eliminated too); input.js binds it to Digit7 ahead of streak2, so Supply Drop reads 8 now (the mergeBinds migration carries old saves)
     // [T132] THE DEAD-HANDS LAW — the whole weapon/stance/meta input block gates on alive:
     // the user playtest reloaded + swapped on the eliminated screen (the death recap rides
     // the SAME loop). Dead hands hold LOOK and nothing else (the §62.4 M17 latch law,
@@ -1630,6 +1715,8 @@ function loop() {
       bots: CFG.MP.enabled ? { bots: remoteActors() } : bots, // T2-10: remotes on the minimap via field-compatible pseudo-actors (zero hud changes)
       uav: CFG.MP.enabled ? mp.uavT > 0 : match.uavT > 0,
       zones: match.mode === 'ctl' ? SND_SITES.map(s => ({ id: s.id, done: !!s.ctlDone, prog: s.ctlProg || 0 })) : null, // T98: one zone feed, two writers (offline updateCtl / MP zf mirror)
+      br: match.mode === 'br' ? (CFG.MP.enabled ? (mp.brB || null) : match.br) : null, // [T171] the BR HUD row — offline reads the machine, MP reads the zone mirror
+      brAlive: match.mode === 'br' ? (CFG.MP.enabled ? remoteActors().filter(a => a.alive).length + (player.alive ? 1 : 0) : [...bots.bots].filter(b => b.alive).length + (player.alive ? 1 : 0)) : 0,
     });
     // scoreboard hold
     if (Input.keys.has('Tab') || Input.padScoreboard) {

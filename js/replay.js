@@ -68,6 +68,7 @@ function pushRing(ring, j, extra, budget, bytesKey) {
 export const Replay = {
   get armed() { return R.armed; },
   get recording() { return R.armed && R.startedAt > 0; },
+  get elapsedMs() { return R.armed && R.startedAt > 0 ? Date.now() - R.startedAt : 0; }, // [T146] the live REC face — startedAt is epoch ms (replay.js:45), so elapsed rides Date.now, not performance.now
   get lastPacked() { return R.lastPacked; }, // viewer fallback + probe surface (§26.3)
 
   // mp.js initMP opts.replay — flag OFF leaves the module fully inert (§26.5)

@@ -76,6 +76,7 @@ export class PlayerController {
         tech: !CFG.MP.enabled, tapEdge },
       { colliders: World.colliders, jumpPads: World.jumpPads, ladders: World.ladders, water: World.water }, dt);
     if (ev.splash && ev.splash.v > 2.5) SFX.footstep(null, true); // [T130] the water entry beat rides the existing step voice (no audio.js edit)
+    if (this.hooks.dropGlide) this.hooks.dropGlide(this, ev); // [T171] BR insertion law (main.js): fall-vel cap while gliding + dropT cleared on landing
 
     // presentation reattached from physics events
     if (ev.slideStart) SFX.footstep(null, true);
@@ -124,6 +125,7 @@ export class PlayerController {
     if (this.alive && this.lastDamageT > CFG.HEALTH.regenDelay && this.hp < CFG.HEALTH.maxHP) this.hp = Math.min(CFG.HEALTH.maxHP, this.hp + CFG.HEALTH.regenRate * dt);
     // shield decay (supply overshield)
     if (this.shield > 0) { this.shieldT -= dt; if (this.shieldT <= 0) this.shield = Math.max(0, this.shield - CFG.HEALTH.shieldDecay * dt * 10); }
+    if (this.juggT > 0) this.juggT -= dt; // [T161 R6] the juggernaut suit clock — cut+speed laws read it, expiry returns the base body
     // spawn protection
     if (this.spawnProt > 0) this.spawnProt -= dt;
   }

@@ -4,8 +4,8 @@
 // DOM capture [COD: 6s, contest freeze, +1/5s/flag, win 200]
 // ============================================================
 import * as THREE from 'three';
-import { CFG, GG_LADDER, SND_SITES, SND_BOMB, ABILITIES, WEAPONS } from './config.js';
-import { World, rayAABB, segmentBlocked } from './world.js';
+import { CFG, GG_LADDER, SND_SITES, SND_BOMB, ABILITIES, WEAPONS, BR_LOOT } from './config.js';
+import { World, rayAABB, segmentBlocked, makeLootPickup, takeLootPickup, updateGasZone, hideGasZone } from './world.js';
 import * as FX from './effects.js';
 import * as SFX from './audio.js';
 
@@ -24,8 +24,10 @@ export class Match {
     this.respawnQueue = []; // {actor, t}
     this.ability = null; this.abilityCd = 0; this.abilityCharges = 0;
     this.streakReady = [false, false, false];
-    this.airstrikes = []; // {t, target, dir}
-    this.supplyCrates = [];
+    this.loadout = hooks.streakLoadout || [0, 1, 2]; // [T155 R6] slot→STREAKS-def map (career.streakLoadout, injected by main.js; default = the pre-T155 slots verbatim)
+    this.airstrikes = []; // {t, target, dir, def}
+    this.supplyCrates = []; // {mesh, owner, def}
+    this.burnZones = []; // [T155 R6] napalm DoT residue {center, r, t, dps, owner, acc}
     this.lastDamageFrom = null;
     this.session = { bestStreak: 0, bestMulti: 0 };
     // --- T1-1 modes (SS22) ---
@@ -43,6 +45,7 @@ export class Match {
     this.inf = null;           // {started, first, pz} — Infected countdown + conversion machine (snapshot truth law)
     this.ctl = null;           // {r, side, phase, roundT, caps, extraUsed, sites} — Control machine (78-a numerics)
     this.gfInterT = 0; this.ctlInterT = 0;
+    this.br = null;            // [T171] Battle Royale machine — {ph, st, t, cx, cz, r, tx, tz, tr, dps, acc, spectT}
   }
 
   start(mode, difficulty) {
@@ -51,7 +54,7 @@ export class Match {
     this.countdownT = 3.0;
     this.teamKills = [0, 0, 0]; this.domScore = [0, 0];
     this.multikills = []; this.respawnQueue = [];
-    this.uavT = 0; this.airstrikes = []; this.supplyCrates = [];
+    this.uavT = 0; this.airstrikes = []; this.supplyCrates = []; this.burnZones = [];
     this.session = { bestStreak: 0, bestMulti: 0 };
     // T1-1 resets (SS22)
     this.objS = [0, 0]; this.hpIdx = -1; this.hpT = 0; this.hpTickT = 0;
@@ -74,6 +77,7 @@ export class Match {
     if (mode === 'gf') { this.gf = { r: 1, side: 0, phase: 'pre', roundT: 0, kit: null }; this.gfRoundStart(); } // L1: round machine boot
     if (mode === 'inf') { this.inf = { started: false, first: m.first, pz: null }; } // L2: snapshot truth inf:{started:false, first:15, alive0:1}
     if (mode === 'ctl') { this.ctl = { r: 1, side: 0, phase: 'pre', roundT: 0, caps: 0, extraUsed: false, sites: [] }; this.ctlRoundStart(); } // L3: two zones, attackers = team 0
+    if (mode === 'br') this.brStart(); // [T171] gas machine + loot economy + the announce
     if (mode === 'gg') this.hooks.announce('GUN GAME', GG_LADDER.length + ' WEAPONS + KNIFE FINISHER');
   }
 
@@ -116,6 +120,7 @@ export class Match {
     if (this.mode === 'gf') this.updateGf(dt);
     if (this.mode === 'inf') this.updateInf(dt);
     if (this.mode === 'ctl') this.updateCtl(dt);
+    if (this.mode === 'br') this.updateBr(dt); // [T171] gas machine + elimination law
     // streaks
     if (this.uavT > 0) this.uavT -= dt;
     // abilities
@@ -125,17 +130,36 @@ export class Match {
       const a = this.airstrikes[i];
       a.t -= dt;
       if (a.t <= 0) {
-        const st = CFG.STREAKS[1];
-        for (let b = 0; b < st.bombs; b++) {
+        const st = a.def || CFG.STREAKS[1]; // [T155 R6] the strike's OWN def (waves/bombs/dmg per streak)
+        // [T161 R6] the AI-TRACKING wave law — st.ai (CHOPPER, the AI-UNIT class): each wave
+        // retargets to the nearest live enemy of the owner at WAVE-TIME (targeting
+        // intelligence, not a fixed point); no live enemy → the last point stands.
+        if (st.ai) {
+          let best = null, bd = Infinity;
+          for (const b of this.hooks.bots.bots) {
+            if (!b.alive || b.team === a.owner.team) continue;
+            const d2 = b.pos.distanceToSquared(a.owner.pos);
+            if (d2 < bd) { bd = d2; best = b; }
+          }
+          if (best) { a.target.copy(best.pos); a.target.y = 0; }
+        }
+        const bombs = st.bombs || 1;
+        for (let b = 0; b < bombs; b++) {
           setTimeout(() => {
             if (this.state === 'ended') return;
-            const p = a.target.clone().addScaledVector(a.dir, (b - (st.bombs - 1) / 2) * 3.2);
+            const p = a.target.clone().addScaledVector(a.dir, (b - (bombs - 1) / 2) * 3.2);
             p.y = 0.4;
             FX.explosion(p, st.radius);
             SFX.explosion(p);
             FX.shake(0.05);
             this.areaDamage(p, st.radius, st.dmg, a.owner);
           }, b * 130);
+        }
+        if (st.fx === 'napalm') { // [T155 R6] the burn zone lands after the last bomb — 25 dps × 8s area denial
+          setTimeout(() => {
+            if (this.state === 'ended') return;
+            this.burnZones.push({ center: a.target.clone(), r: st.radius, t: st.burn, dps: st.dmg, owner: a.owner, acc: 0 });
+          }, bombs * 130);
         }
         this.airstrikes.splice(i, 1);
       }
@@ -146,9 +170,20 @@ export class Match {
       c.mesh.position.y -= 9 * dt;
       if (c.mesh.position.y <= 0.45) {
         c.mesh.position.y = 0.45;
-        this.grantSupply(c.owner, c.mesh.position);
+        this.grantSupply(c.owner, c.mesh.position, c.def);
         this.hooks.scene().remove(c.mesh);
         this.supplyCrates.splice(i, 1);
+      }
+    }
+    // [T155 R6] napalm burn zones — half-second damage ticks (the modes-side of the hub's room.burns)
+    for (let i = this.burnZones.length - 1; i >= 0; i--) {
+      const z = this.burnZones[i];
+      z.t -= dt;
+      if (z.t <= 0) { this.burnZones.splice(i, 1); continue; }
+      z.acc += dt;
+      if (z.acc >= 0.5) {
+        z.acc = 0;
+        this.areaDamage(z.center, z.r, z.dps * 0.5, z.owner);
       }
     }
     // multikill window cleanup
@@ -578,6 +613,81 @@ export class Match {
     if (!atkAlive && atkLives <= 0) { this.ctlRoundEnd(1 - c.side, 'ATTACKERS OUT OF LIVES'); return; }
   }
 
+  // ---------------- [T171] BATTLE ROYALE machine ----------------
+  // Offline truth; the room authority mirrors it (mini-services/ironsight-room brUpdate).
+  brStart() { // gas machine boot + the ground-loot economy (nav-node scatter: 9 m pass + top-up pass to the quota)
+    const br = CFG.MODES.br, ph = br.gas.phases[0];
+    this.br = { ph: 0, st: 'wait', t: ph.wait, cx: 0, cz: 0, r: br.gas.r0, tx: 0, tz: 0, tr: ph.r, dps: ph.dps, acc: 0, spectT: null };
+    this.brPick();
+    const nodes = World.waypoints.map((w, i) => i);
+    for (let i = nodes.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const tmp = nodes[i]; nodes[i] = nodes[j]; nodes[j] = tmp; }
+    let placed = 0; const pts = [];
+    for (const ni of nodes) { // pass 1: 9 m spacing
+      if (placed >= br.lootN) break;
+      const p = World.waypoints[ni].p;
+      if (pts.some(q => Math.hypot(q.x - p.x, q.z - p.z) < 9)) continue;
+      pts.push(p);
+      const roll = Math.random();
+      const kind = roll < 0.42 ? 'wpn' : roll < 0.62 ? 'arm' : roll < 0.82 ? 'ammo' : 'hp';
+      makeLootPickup(p.x + (Math.random() - 0.5) * 2, p.z + (Math.random() - 0.5) * 2, kind, kind === 'wpn' ? BR_LOOT[(Math.random() * BR_LOOT.length) | 0] : undefined);
+      placed++;
+    }
+    for (const ni of nodes) { // pass 2: top-up without spacing (clustered nav still fills the quota)
+      if (placed >= br.lootN) break;
+      const p = World.waypoints[ni].p;
+      if (pts.some(q => Math.hypot(q.x - p.x, q.z - p.z) < 2.5)) continue;
+      pts.push(p);
+      const roll = Math.random();
+      const kind = roll < 0.42 ? 'wpn' : roll < 0.62 ? 'arm' : roll < 0.82 ? 'ammo' : 'hp';
+      makeLootPickup(p.x + (Math.random() - 0.5) * 2, p.z + (Math.random() - 0.5) * 2, kind, kind === 'wpn' ? BR_LOOT[(Math.random() * BR_LOOT.length) | 0] : undefined);
+      placed++;
+    }
+    this.hooks.announce('BATTLE ROYALE', br.players + ' COMBATANTS — LAST ALIVE WINS');
+  }
+  brPick() { // next closure target: center drifts within 0.6·(rCur − rNext) — the circle always stays inside the current one
+    const next = CFG.MODES.br.gas.phases[this.br.ph];
+    const m = Math.max(0, (this.br.r - next.r) * 0.6);
+    const a = Math.random() * Math.PI * 2, d = Math.random() * m;
+    this.br.tx = this.br.cx + Math.cos(a) * d; this.br.tz = this.br.cz + Math.sin(a) * d;
+    this.br.tr = next.r; this.br.dps = next.dps;
+  }
+  updateBr(dt) { // wait→shrink phase machine + gas DoT + elimination/spectate law
+    const br = this.br;
+    if (br.st === 'wait') {
+      br.t -= dt;
+      if (br.t <= 0) { br.st = 'shrink'; br.t = CFG.MODES.br.gas.phases[br.ph].shrink; br.sr = br.r; br.scx = br.cx; br.scz = br.cz; this.hooks.announce('THE GAS CLOSES', 'ZONE ' + (br.ph + 1) + ' — GET INSIDE'); }
+    } else {
+      br.t -= dt;
+      const dur = CFG.MODES.br.gas.phases[br.ph].shrink;
+      const k = 1 - Math.max(0, br.t) / dur;
+      br.r = br.sr + (br.tr - br.sr) * k; br.cx = br.scx + (br.tx - br.scx) * k; br.cz = br.scz + (br.tz - br.scz) * k;
+      if (br.t <= 0) { br.r = br.tr; br.cx = br.tx; br.cz = br.tz; if (br.ph < CFG.MODES.br.gas.phases.length - 1) { br.ph++; br.st = 'wait'; br.t = CFG.MODES.br.gas.phases[br.ph].wait; this.brPick(); } else br.t = 0; } // final circle holds at the last dps
+    }
+    updateGasZone(br.cx, br.cz, br.r, br.tx, br.tz, br.tr); // wall + next-ring pose
+    World.brZone = { cx: br.cx, cz: br.cz, r: br.r }; // bots.js rotate law reads this
+    br.acc += dt;
+    if (br.acc >= 0.5) { // gas DoT — 0.5 s tick, flat dps outside the wall (no LoS, no falloff — it's gas)
+      const tick = br.acc; br.acc = 0;
+      for (const a of this.allActors()) {
+        if (!a.alive) continue;
+        if (Math.hypot(a.pos.x - br.cx, a.pos.z - br.cz) <= br.r) continue;
+        if (a.isPlayer) this.hooks.damagePlayer(br.dps * tick, { name: 'THE GAS', pos: a.pos.clone() }, false, 'GAS');
+        else this.hooks.bots.applyDamage(a, br.dps * tick, false, null, 'GAS');
+      }
+    }
+    if (this.state !== 'live') return;
+    const pl = this.hooks.player;
+    if (!pl.alive) { br.spectT = (br.spectT ?? 5) - dt; if (br.spectT <= 0) this.finish('wiped'); return; } // eliminated → short spectate → resolve
+    const alive = this.allActors().filter(a => a.alive).length;
+    if (alive <= 1) this.finish('lastalive'); // last-alive law (the player is the 1 — win)
+  }
+  brDeathDrop(victim) { // [T171] the dead leave loot: ammo 70% + armor 25% (config chances)
+    const br = CFG.MODES.br;
+    const jx = () => (Math.random() - 0.5) * 1.6;
+    if (Math.random() < br.deathDropCr) makeLootPickup(victim.pos.x + jx(), victim.pos.z + jx(), 'ammo');
+    if (Math.random() < br.deathDropArm) makeLootPickup(victim.pos.x + jx(), victim.pos.z + jx(), 'arm');
+  }
+
   areaDamage(pos, radius, maxDmg, attacker) {
     const pl = this.hooks.player;
     for (const a of this.allActors()) {
@@ -612,11 +722,11 @@ export class Match {
     }
   }
 
-  grantSupply(owner, pos) {
+  grantSupply(owner, pos, def) {
     SFX.pickup(null, 0);
     if (!owner || !owner.isPlayer) return;
     const pl = owner;
-    pl.shield = CFG.HEALTH.shieldMax; pl.shieldT = CFG.STREAKS[2].shieldTime;
+    pl.shield = CFG.HEALTH.shieldMax; pl.shieldT = (def && def.shieldTime) || CFG.STREAKS[2].shieldTime;
     this.hooks.refillLoadout();
     this.hooks.banner(0, 'SUPPLY DROP SECURED');
   }
@@ -645,10 +755,12 @@ export class Match {
       }
       if (CFG.STREAK_STRINGS[killer.streak]) this.hooks.announce(CFG.STREAK_STRINGS[killer.streak], `${killer.streak} streak`);
       // scorestreak unlocks [BO2 score-based]
-      CFG.STREAKS.forEach((s, i) => {
-        if (!this.streakReady[i] && killer.score >= s.cost) {
-          this.streakReady[i] = true;
-          this.hooks.announce('', s.name + ' READY — [' + (i + 5) + ']');
+      CFG.STREAKS.forEach((s, di) => { // [T155 R6] unlock check walks the EQUIPPED slots, not def indices
+        const si = this.loadout.indexOf(di);
+        if (si < 0 || si >= this.streakReady.length) return;
+        if (!this.streakReady[si] && killer.score >= s.cost) {
+          this.streakReady[si] = true;
+          this.hooks.announce('', s.name + ' READY — [' + (si + 5) + ']');
           SFX.pickup(null, 1);
         }
       });
@@ -659,9 +771,10 @@ export class Match {
     // v1.55 T89 respawn laws: gf dead sit out the round (snd parity); inf converts survivors
     // (COD Infected law — the dead join the horde, no survivor respawn); ctl respawns ONLY
     // while lives remain (attrition law — 0 lives = sit out the round, attackers bleed out)
-    const noRespawn = this.mode === 'snd' || this.mode === 'gf';
+    const noRespawn = this.mode === 'snd' || this.mode === 'gf' || this.mode === 'br'; // [T171] BR: one life — no respawn queue
     const outOfLives = this.mode === 'ctl' && ((victim.ctlLives ?? CFG.MODES.ctl.lives) - 1) <= 0;
     if (!noRespawn && !outOfLives) this.respawnQueue.push({ actor: victim, t: CFG.HEALTH.respawnDelay });
+    if (this.mode === 'br' && victim.pos) this.brDeathDrop(victim); // [T171] the dead leave loot
     if (this.mode === 'inf' && this.inf && this.inf.started) this.infConvert(victim); // L2: conversion (after any queue push — converted respawn on the horde side)
     if (this.mode === 'ctl' && victim.ctlLives != null) victim.ctlLives--; // L3 attrition law: every death burns a life (the only decrement site)
     // T1-1 kill hooks (SS22): kc tag drop + gg ladder advance
@@ -705,28 +818,39 @@ export class Match {
     if (this.mode === 'gg') return; // SS22.4: no scorestreaks in gun game [SPEC DECISION]
     if (!this.streakReady[i] || this.state !== 'live') return;
     this.streakReady[i] = false;
+    const def = CFG.STREAKS[(this.loadout && this.loadout[i] != null) ? this.loadout[i] : i] || CFG.STREAKS[i]; // [T155 R6] slot→def (10 defs, 3 slots)
     const pl = this.hooks.player;
-    if (i === 0) { this.uavT = CFG.STREAKS[0].dur; this.hooks.announce('UAV ONLINE', 'enemy positions revealed'); SFX.pickup(null, 0); }
-    if (i === 1) {
+    if (def.fx === 'uav') { this.uavT = def.dur; this.hooks.announce('UAV ONLINE', 'enemy positions revealed'); SFX.pickup(null, 0); }
+    if (def.fx === 'ammo') { this.hooks.refillLoadout(); this.hooks.announce('AMMO DROP', 'resupplied'); SFX.pickup(null, 0); } // the resupply-kit law, score-earned
+    if (def.fx === 'stim') { pl.healRate = def.heal / def.healTime; pl.healT = def.healTime; this.hooks.announce('STIM RIG', 'healing'); SFX.pickup(null, 0); } // the stim-kit law, score-earned
+    if (def.fx === 'armor') { pl.shield = Math.min(CFG.HEALTH.shieldMax, pl.shield + def.shield); pl.shieldT = def.shieldTime; this.hooks.announce('ARMOR DROP', 'plates up'); SFX.pickup(null, 1); } // the aegis-kit law, score-earned
+    if (def.fx === 'jugg') { // [T161 R6] the AI-UNIT class: the JUGGERNAUT SUIT — aegis-family shield + the damage-taken cut (pl.juggT read by the receive path) + the walk-speed law (pl.juggSpeed read by the move path); score-earned, the MW grammar (slow, armored, deadly)
+      pl.shield = Math.min(CFG.HEALTH.shieldMax, pl.shield + def.shield); pl.shieldT = def.shieldTime;
+      pl.juggT = def.shieldTime; pl.juggCut = 1 - def.cut; pl.juggSpeed = def.speed;
+      this.hooks.announce('JUGGERNAUT', 'suit online'); SFX.pickup(null, 1);
+    }
+    if (def.fx === 'strike' || def.fx === 'napalm') {
       const cam = this.hooks.camera();
       const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
       const target = new THREE.Vector3();
       const o = pl.eyePos(new THREE.Vector3());
       const hit = rayAABB(o, dir, 120);
       target.copy(o).addScaledVector(dir, hit ? hit.t : 40); target.y = 0;
-      this.airstrikes.push({ t: CFG.STREAKS[1].delay, target, dir: new THREE.Vector3(Math.cos(Math.random() * Math.PI), 0, Math.sin(Math.random() * Math.PI)), owner: pl });
-      this.hooks.announce('AIRSTRIKE INBOUND', 'take cover');
+      for (let wv = 0; wv < (def.waves || 1); wv++) { // [T155 R6] waves: staggered bomb volleys (ARTILLERY ×3, SWARM ×2)
+        this.airstrikes.push({ t: def.delay + wv * 1.4, target: target.clone(), dir: new THREE.Vector3(Math.cos(Math.random() * Math.PI), 0, Math.sin(Math.random() * Math.PI)), owner: pl, def });
+      }
+      this.hooks.announce(def.name + ' INBOUND', 'take cover');
       SFX.announceSting(1);
     }
-    if (i === 2) {
+    if (def.fx === 'supply') {
       const cam = this.hooks.camera();
       const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion); dir.y = 0; dir.normalize();
       const pos = pl.pos.clone().addScaledVector(dir, 7);
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, 1.4), new THREE.MeshStandardMaterial({ color: 0x3a4048, emissive: 0x29d3ff, emissiveIntensity: 0.25 }));
       mesh.position.set(pos.x, 26, pos.z); mesh.castShadow = true;
       this.hooks.scene().add(mesh);
-      this.supplyCrates.push({ mesh, owner: pl });
-      this.hooks.announce('SUPPLY DROP', 'inbound');
+      this.supplyCrates.push({ mesh, owner: pl, def });
+      this.hooks.announce(def.name, 'inbound');
     }
   }
 
@@ -786,6 +910,7 @@ export class Match {
     this.state = 'ended';
     for (const h of World.hills) { h.ring.visible = false; h.disc.visible = false; } // SS22: hide objective meshes on end
     for (const s of World.sndSites) s.ring.visible = false;
+    hideGasZone(); World.brZone = null; // [T171] gas meshes down on every end (safe no-op off-br)
     const pl = this.hooks.player;
     let win = false, draw = false;
     if (this.mode === 'ffa') {
@@ -813,6 +938,8 @@ export class Match {
       win = this.objS[0] > this.objS[1]; draw = this.objS[0] === this.objS[1];
     } else if (this.mode === 'inf') { // T89 L2: survivors win the clock; horde wins the conversion
       win = pl.team !== 1; draw = false;
+    } else if (this.mode === 'br') { // [T171] LAST-ALIVE law: survived to the resolve = win (lastalive, or time expiry while alive); wiped = loss
+      win = pl.alive; draw = false;
     } else win = true;
     SFX.victoryJingle(win && !draw);
     pl.score += win && this.mode !== 'practice' ? CFG.XP.win : (this.mode !== 'practice' ? CFG.XP.loss : 0);

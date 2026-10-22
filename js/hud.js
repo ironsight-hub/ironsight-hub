@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { CFG, GG_LADDER } from './config.js';
 import { t as tr } from './i18n.js'; // T2-8 (Task 64): alias tr — hud.js uses `t` as a local DOM handle (spec-target)
 import { World } from './world.js';
+import { Replay } from './replay.js'; // [T146] the live REC elapsed (replay.js is a leaf — zero imports, no cycle)
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -20,7 +21,7 @@ export class HUD {
       weaponMode: $('weapon-mode'), ammoWrap: $('ammo-wrap'),
       abilityIcon: $('ability-icon'), abilityCd: $('ability-cd'), abilityCharges: $('ability-charges'),
       fragCount: $('frag-count'),
-      killfeed: $('killfeed'), announcer: $('announcer'), subAnn: $('sub-announcer'), banners: $('banners'),
+      killfeed: $('killfeed'), announcer: $('announcer'), subAnn: $('sub-announcer'), banners: $('banners'), captions: $('captions'), // [T161 R13] the subtitle bar (may be absent in old shells — caption() self-gates)
       minimap: $('minimap'), mapWrap: $('map-wrap'), compass: $('compass'),
       objBar: $('obj-bar'), objA: $('obj-A'), objB: $('obj-B'), objC: $('obj-C'), objInfo: $('obj-info'),
       scoreAlly: $('score-ally'), scoreEnemy: $('score-enemy'), timer: $('match-timer'),
@@ -29,6 +30,7 @@ export class HUD {
       scoreboard: $('scoreboard'), sbHead: $('sb-head'), sbBody: $('sb-body'), sbTitle: $('sb-title'),
       death: $('death-screen'), deathRecap: $('death-recap'), respawnTimer: $('respawn-timer'),
       fps: $('fps-counter'), practice: $('practice-panel'),
+      br: $('br-hud'), gasV: $('gas-vignette'), // [T171] the BR row + the gas vignette (may be absent in old shells — self-gated)
       ppDps: $('pp-dps'), ppHits: $('pp-hits'), ppShots: $('pp-shots'), ppAcc: $('pp-acc'),
       streaks: [...document.querySelectorAll('.streak')],
     };
@@ -140,19 +142,35 @@ export class HUD {
   }
 
   announce(main, sub) {
+    // [T161 R13/R15] the a11y surfaces — reducedMotion gates the gsap pulse (no motion, the
+    // text still lands); subtitles mirror the line into the caption bar (setSubtitles).
     if (main) {
       this.el.announcer.textContent = main;
-      if (window.gsap) gsap.fromTo(this.el.announcer, { opacity: 0, scale: 1.25, letterSpacing: '0.4em' }, { opacity: 1, scale: 1, letterSpacing: '0.18em', duration: 0.25, ease: 'power3.out' });
+      if (window.gsap && !this._reduced) gsap.fromTo(this.el.announcer, { opacity: 0, scale: 1.25, letterSpacing: '0.4em' }, { opacity: 1, scale: 1, letterSpacing: '0.18em', duration: 0.25, ease: 'power3.out' });
       else this.el.announcer.style.opacity = '1';
       clearTimeout(this._annT);
       this._annT = setTimeout(() => { this.el.announcer.style.opacity = '0'; }, 1800);
     }
+    if (this._subs) this.caption(main || '', sub || '');
     if (sub) {
       this.el.subAnn.textContent = sub;
       this.el.subAnn.style.opacity = '1';
       clearTimeout(this._subT);
       this._subT = setTimeout(() => { this.el.subAnn.style.opacity = '0'; }, 2200);
     }
+  }
+
+  // [T161 R13/R15] the a11y setters + the caption bar — the announce-mirror surface for
+  // deaf/hoh players (aria-live polite on #captions; the bar self-gates when the shell
+  // predates the element or subtitles are off).
+  setSubtitles(on) { this._subs = !!on; }
+  setReducedMotion(on) { this._reduced = !!on; }
+  caption(main, sub) {
+    const el = this.el.captions; if (!el) return;
+    el.textContent = (main ? main + (sub ? ' — ' : '') : '') + (sub || '');
+    el.style.opacity = '1';
+    clearTimeout(this._capT);
+    this._capT = setTimeout(() => { el.style.opacity = '0'; }, 2600);
   }
 
   // --- T41 §25.4: spectate bar + combat-HUD hide (DOM-injected; spectator = presentation only) ---
@@ -188,6 +206,7 @@ export class HUD {
       '<span id="rp-speed">1×</span>' +
       '<span id="rp-hint" style="opacity:.72;font-size:12px">SPACE PLAY/PAUSE · S SPEED · LMB/RMB ACTOR · MOUSE LOOK</span>';
     this.el.hud.appendChild(this.rpBar);
+    this.rpBar.title = tr('h.recTip'); // [T147] "says recording?" — the bar IS the live replay recorder (T42/T146); the tooltip names it, where to watch it, and the Settings toggle
     const scrub = this.rpBar.querySelector('#rp-scrub');
     this._rpDrag = false;
     scrub.addEventListener('pointerdown', () => { this._rpDrag = true; });
@@ -195,10 +214,16 @@ export class HUD {
     scrub.addEventListener('input', () => { if (this.onReplayScrub) this.onReplayScrub((+scrub.value / 1000) * (this._rpDur || 0)); });
   }
 
-  replayRec(on) { // live-MP recording indicator (bar shows REC dot only; controls stay hidden)
+  replayRec(on) { // live-MP recording indicator — [T146] the LIVE face: REC dot + a TICKING elapsed only (the viewer chrome — scrub/speed/hint — never renders in live mode; fixes the dead '0:00 / 0:00' that never moved with the clock)
     this.replayBarInit();
-    this.rpBar.style.display = on || this._rpViewer ? 'flex' : 'none';
+    this.rpBar.style.display = (on || this._rpViewer) ? 'flex' : 'none';
     this.rpBar.querySelector('#rp-rec').style.display = on ? 'inline' : 'none';
+    const chrome = !!this._rpViewer; // viewer session → full controls; live record → dot + elapsed
+    this.rpBar.querySelector('#rp-scrub').style.display = chrome ? 'inline' : 'none';
+    this.rpBar.querySelector('#rp-speed').style.display = chrome ? 'inline' : 'none';
+    this.rpBar.querySelector('#rp-hint').style.display = chrome ? 'inline' : 'none';
+    const t = this.rpBar.querySelector('#rp-time');
+    if (!chrome) t.textContent = on ? (ms => Math.floor(ms / 60000) + ':' + String(Math.floor(ms / 1000) % 60).padStart(2, '0'))(Replay.elapsedMs || 0) : '';
   }
 
   replayShow(mode, data) { // viewer: 'play' → controls; 'empty' → notice
@@ -514,6 +539,16 @@ export class HUD {
     this.el.shieldFill.style.transform = `scaleX(${p.shield / CFG.HEALTH.shieldMax})`;
     this.el.lowV.style.opacity = p.hp < 35 && p.alive ? String(1 - p.hp / 35) : '0';
     this.el.dmgV.style.opacity = String(Math.max(0, 1 - p.lastDamageT / 1.2) * 0.9);
+    const brEl = this.el.br; // [T171] the BR row — alive count + zone clock + gas warning (self-gated)
+    if (brEl && ctx.br) {
+      const out = Math.hypot(p.pos.x - ctx.br.cx, p.pos.z - ctx.br.cz) > ctx.br.r;
+      const ba = brEl.querySelector('.br-alive'), bz = brEl.querySelector('.br-zone'), bw = brEl.querySelector('.br-warn');
+      if (ba) ba.textContent = String(ctx.brAlive);
+      if (bz) bz.textContent = (ctx.br.st === 'shrink' ? 'CLOSING' : 'ZONE ' + ((ctx.br.ph || 0) + 1)) + ' ' + Math.max(0, Math.ceil(ctx.br.t)) + 's';
+      if (bw) bw.style.opacity = out ? '1' : '0';
+      brEl.classList.remove('hidden');
+      if (this.el.gasV) this.el.gasV.style.opacity = out && p.alive ? '0.55' : '0';
+    } else if (brEl) { brEl.classList.add('hidden'); if (this.el.gasV) this.el.gasV.style.opacity = '0'; }
     // ammo
     const w = ctx.weapons.w;
     if (w) {

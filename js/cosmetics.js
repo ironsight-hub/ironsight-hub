@@ -43,6 +43,17 @@ export const FINISHES = [
   { id: 'camo-jungle',  label: 'JUNGLE',        body: 0x4a5d3a, accent: 0x2f3a26, metal: 0.40, rough: 0.70, req: { k: 'weaponKills', n: 250,  t: '250 KILLS (PER WEAPON)', wreq: true }, r: 'epic',      tier: 2, desc: 'Woodland green wrap — 250 eliminations with this weapon' },
   { id: 'camo-digital', label: 'DIGITAL',       body: 0x5a6470, accent: 0x3e4550, metal: 0.55, rough: 0.55, req: { k: 'weaponKills', n: 500,  t: '500 KILLS (PER WEAPON)', wreq: true }, r: 'legendary', tier: 3, desc: 'Digital slate wrap — 500 eliminations with this weapon' },
   { id: 'camo-gold',    label: 'GOLD',          body: 0xd4af37, accent: 0x9c7c1e, metal: 0.95, rough: 0.25, req: { k: 'weaponKills', n: 1000, t: '1000 KILLS (PER WEAPON)', wreq: true }, r: 'legendary', tier: 4, desc: 'Master gold — 1000 eliminations with this weapon' },
+  // [T155 R32] the 8-deep catalog wave: career-unlock finishes only (req keys = the shipped
+  // career stats verbatim — matches/wins/kills/bestStreak; no new unlock surface, the
+  // MG_ECO_POOL mirror recomputes 1:1 by law).
+  { id: 'ghostgrey',  label: 'GHOST GREY',  body: 0x8b9096, accent: 0x5c6167, metal: 0.45, rough: 0.55, req: { k: 'matches',    n: 250,  t: 'PLAY 250 MATCHES' }  , r: 'common' },
+  { id: 'topride',    label: 'TOP RIDE',    body: 0x2a6e5c, accent: 0x1a453a, metal: 0.55, rough: 0.42, req: { k: 'wins',       n: 50,   t: 'WIN 50 MATCHES' }    , r: 'rare' },
+  { id: 'frostbite',  label: 'FROSTBITE',   body: 0x9fc7e8, accent: 0x5a86ad, metal: 0.60, rough: 0.35, req: { k: 'wins',       n: 75,   t: 'WIN 75 MATCHES' }    , r: 'rare' },
+  { id: 'nightfall',  label: 'NIGHTFALL',   body: 0x1b1e2c, accent: 0x3d2f66, metal: 0.72, rough: 0.30, req: { k: 'bestStreak', n: 12,   t: 'REACH A 12 STREAK' } , r: 'epic' },
+  { id: 'bloodline',  label: 'BLOODLINE',   body: 0x5c1a1a, accent: 0x8a2f2f, metal: 0.50, rough: 0.48, req: { k: 'kills',      n: 500,  t: '500 ELIMINATIONS' }  , r: 'epic' },
+  { id: 'steelrain',  label: 'STEEL RAIN',  body: 0x4e5a64, accent: 0x2b3238, metal: 0.85, rough: 0.28, req: { k: 'wins',       n: 100,  t: 'WIN 100 MATCHES' }   , r: 'legendary' },
+  { id: 'royalsun',   label: 'ROYAL SUN',   body: 0xd4a017, accent: 0x9c6d1d, metal: 0.95, rough: 0.22, req: { k: 'kills',      n: 1000, t: '1000 ELIMINATIONS' } , r: 'legendary' },
+  { id: 'voidopal',   label: 'VOID OPAL',   body: 0x3a2f5c, accent: 0x7a5cff, metal: 0.90, rough: 0.20, req: { k: 'matches',    n: 1000, t: 'PLAY 1000 MATCHES' } , r: 'legendary' },
   // [T93 — BP-exclusives gain their visual form] the 20 BPX_FINISHES ids (metagame.js mirror,
   // zero-import law) were labels-only since T90; bundles could sell them but the loadout had
   // nothing to render. The colorways below are OUR authored PBR reconstruction of the v1.50
@@ -74,6 +85,31 @@ export const FINISHES = [
   // (the tksku op prices from THIS field); the tk flag also EXCLUDES them
   // from ECO_POOL (never CR-sold, never case-gambled — the FTC-clean law:
   // the token catalog is purchased, not randomized).
+  // [T161 R32] THE VAULT 100+ WAVE — the named delta ("total vault count still ~60s vs 100+
+  // item Apex/MW vaults") closes: +20 career-unlock finishes below take the vault (FINISHES +
+  // CHARMS + TRAILS + EMOTES) from 63 to 101 items — every req key = the shipped career stats
+  // verbatim, every rarity = an existing ECO_PRICE key (the pool mirror recomputes 1:1).
+  { id: 'olivetan',   label: 'OLIVE TAN',    body: 0x6b6b47, accent: 0x4a4a30, metal: 0.45, rough: 0.62, req: { k: 'matches', n: 15,   t: 'PLAY 15 MATCHES' }   , r: 'common' },
+  { id: 'slatecoat',  label: 'SLATE COAT',   body: 0x4e5560, accent: 0x33383f, metal: 0.50, rough: 0.50, req: { k: 'kills',    n: 40,   t: '40 ELIMINATIONS' }   , r: 'common' },
+  { id: 'emberline',  label: 'EMBER LINE',   body: 0x7a3020, accent: 0xe8953a, metal: 0.52, rough: 0.44, req: { k: 'kills',    n: 60,   t: '60 ELIMINATIONS' }   , r: 'rare' },
+  { id: 'tundra',     label: 'TUNDRA',       body: 0xdfe8ee, accent: 0x9fb3bd, metal: 0.58, rough: 0.38, req: { k: 'wins',     n: 12,   t: 'WIN 12 MATCHES' }    , r: 'rare' },
+  { id: 'jadeband',   label: 'JADE BAND',    body: 0x2f6b52, accent: 0x1c4232, metal: 0.60, rough: 0.35, req: { k: 'wins',     n: 20,   t: 'WIN 20 MATCHES' }    , r: 'rare' },
+  { id: 'copperhead', label: 'COPPERHEAD',   body: 0x8a4a24, accent: 0xc47a3a, metal: 0.82, rough: 0.30, req: { k: 'kills',    n: 150,  t: '150 ELIMINATIONS' }  , r: 'rare' },
+  { id: 'midnight2',  label: 'MIDNIGHT II',  body: 0x14161f, accent: 0x2a3550, metal: 0.75, rough: 0.26, req: { k: 'bestStreak', n: 10, t: 'REACH A 10 STREAK' } , r: 'epic' },
+  { id: 'sunspire',   label: 'SUN SPIRE',    body: 0xd8a531, accent: 0x8a6418, metal: 0.92, rough: 0.24, req: { k: 'kills',    n: 300,  t: '300 ELIMINATIONS' }  , r: 'epic' },
+  { id: 'toxicfold',  label: 'TOXIC FOLD',   body: 0x3a4a1e, accent: 0x8adf3a, metal: 0.55, rough: 0.42, req: { k: 'bestStreak', n: 14, t: 'REACH A 14 STREAK' } , r: 'epic' },
+  { id: 'crimsonfold',label: 'CRIMSON FOLD', body: 0x5c1620, accent: 0xd43a5c, metal: 0.70, rough: 0.30, req: { k: 'wins',     n: 60,   t: 'WIN 60 MATCHES' }    , r: 'epic' },
+  { id: 'cobaltring', label: 'COBALT RING',  body: 0x1e3a5c, accent: 0x4a8adf, metal: 0.78, rough: 0.26, req: { k: 'matches',  n: 500,  t: 'PLAY 500 MATCHES' }  , r: 'epic' },
+  { id: 'duneveil',   label: 'DUNE VEIL',    body: 0xbfa878, accent: 0x8a744e, metal: 0.48, rough: 0.58, req: { k: 'matches',  n: 150,  t: 'PLAY 150 MATCHES' }  , r: 'rare' },
+  { id: 'arcticveil', label: 'ARCTIC VEIL',  body: 0xe8f2f8, accent: 0x8ab2c7, metal: 0.62, rough: 0.30, req: { k: 'wins',     n: 40,   t: 'WIN 40 MATCHES' }    , r: 'rare' },
+  { id: 'obsidianrim',label: 'OBSIDIAN RIM', body: 0x0e1014, accent: 0x3a4250, metal: 0.85, rough: 0.20, req: { k: 'bestStreak', n: 16, t: 'REACH A 16 STREAK' } , r: 'legendary' },
+  { id: 'royalplum',  label: 'ROYAL PLUM',   body: 0x4a1e42, accent: 0x8a3a7a, metal: 0.80, rough: 0.24, req: { k: 'kills',    n: 750,  t: '750 ELIMINATIONS' }  , r: 'legendary' },
+  { id: 'titaniumx',  label: 'TITANIUM X',   body: 0x9aa4ad, accent: 0x5c646e, metal: 0.92, rough: 0.22, req: { k: 'wins',     n: 150,  t: 'WIN 150 MATCHES' }   , r: 'legendary' },
+  { id: 'riftline',   label: 'RIFT LINE',    body: 0x1a2430, accent: 0x35e0c8, metal: 0.72, rough: 0.28, req: { k: 'kills',    n: 1200, t: '1200 ELIMINATIONS' } , r: 'legendary' },
+  { id: 'solarcrown', label: 'SOLAR CROWN',  body: 0xe8b83a, accent: 0xa87a18, metal: 0.95, rough: 0.18, req: { k: 'wins',     n: 250,  t: 'WIN 250 MATCHES' }   , r: 'legendary' },
+  { id: 'abyssglow',  label: 'ABYSS GLOW',   body: 0x0a1420, accent: 0x2a8adf, metal: 0.88, rough: 0.20, req: { k: 'matches',  n: 750,  t: 'PLAY 750 MATCHES' }  , r: 'legendary' },
+  { id: 'ironvein',   label: 'IRON VEIN',    body: 0x2e3238, accent: 0xc47a3a, metal: 0.78, rough: 0.30, req: { k: 'kills',    n: 600,  t: '600 ELIMINATIONS' }  , r: 'epic' },
+
   { id: 'tk_vanta', label: 'VANTA PRIME',  body: 0x0a0a0e, accent: 0xff5a3c, metal: 0.88, rough: 0.18, req: { k: 'tk', n: 1, t: 'TOKEN EXCLUSIVE' }, r: 'mythic', tk: 2500, desc: 'Token-exclusive mythic finish — vantablack with ember accents' },
   { id: 'tk_prism', label: 'PRISM HEART',  body: 0x3a2f5c, accent: 0x7de3ff, metal: 0.75, rough: 0.22, req: { k: 'tk', n: 1, t: 'TOKEN EXCLUSIVE' }, r: 'mythic', tk: 2500, desc: 'Token-exclusive mythic finish — refractive prism sheen' },
 ];
@@ -114,7 +150,24 @@ export const CHARMS = [
   { id: 'luckydie',  label: 'LUCKY DIE',   shape: 'die',   color: 0xd96a2f, req: { k: 'kills',      n: 50, t: '50 ELIMINATIONS' }   , r: 'rare' },
   { id: 'voidorb',   label: 'VOID ORB',    shape: 'orb',   color: 0x7a5cff, req: { k: 'bestStreak', n: 5,  t: 'REACH A 5 STREAK' }   , r: 'epic' },
   { id: 'goldshell', label: 'GOLD SHELL',  shape: 'shell', color: 0xc9a227, req: { k: 'wins',       n: 15, t: 'WIN 15 MATCHES' }   , r: 'legendary' },
+  // [T155 R32] the 4-deep charm wave (existing shapes ONLY — tag/die/orb/shell; zero
+  // renderer changes; the tk exclusion law keeps these CR-earnable, pool-computed).
+  { id: 'ironround', label: 'IRON ROUND',  shape: 'shell', color: 0x8b9096, req: { k: 'matches',    n: 100, t: 'PLAY 100 MATCHES' }   , r: 'common' },
+  { id: 'warcandy',  label: 'WAR CANDY',   shape: 'die',   color: 0xd94f6a, req: { k: 'kills',      n: 250, t: '250 ELIMINATIONS' }   , r: 'epic' },
+  { id: 'stormtag',  label: 'STORM TAG',   shape: 'tag',   color: 0x5ad9ff, req: { k: 'bestStreak', n: 10,  t: 'REACH A 10 STREAK' }  , r: 'epic' },
+  { id: 'suncore',   label: 'SUN CORE',    shape: 'orb',   color: 0xffb347, req: { k: 'wins',       n: 60,  t: 'WIN 60 MATCHES' }     , r: 'legendary' },
   // [T110 T2-5] the token-exclusive mythic charm — tk price + the ECO_POOL exclusion (never gambled)
+  // [T161 R32] the 8-deep charm wave (existing shapes only — tag/die/orb/shell; zero
+  // renderer changes; tk exclusion law keeps these CR-earnable, pool-computed).
+  { id: 'brassround', label: 'BRASS ROUND',  shape: 'shell', color: 0xc9a227, req: { k: 'kills',      n: 120, t: '120 ELIMINATIONS' }  , r: 'common' },
+  { id: 'slatetag',   label: 'SLATE TAG',    shape: 'tag',   color: 0x5c646e, req: { k: 'matches',    n: 75,  t: 'PLAY 75 MATCHES' }   , r: 'common' },
+  { id: 'venomdie',   label: 'VENOM DIE',    shape: 'die',   color: 0x7dff5a, req: { k: 'kills',      n: 400, t: '400 ELIMINATIONS' }  , r: 'epic' },
+  { id: 'frosttag',   label: 'FROST TAG',    shape: 'tag',   color: 0x9fc7e8, req: { k: 'bestStreak', n: 8,   t: 'REACH A 8 STREAK' }  , r: 'rare' },
+  { id: 'emberorb',   label: 'EMBER ORB',    shape: 'orb',   color: 0xff7a3c, req: { k: 'wins',       n: 30,  t: 'WIN 30 MATCHES' }    , r: 'rare' },
+  { id: 'voidshell',  label: 'VOID SHELL',   shape: 'shell', color: 0x3a2f5c, req: { k: 'matches',    n: 300, t: 'PLAY 300 MATCHES' }  , r: 'epic' },
+  { id: 'golddie',    label: 'GOLD DIE',     shape: 'die',   color: 0xffd75a, req: { k: 'bestStreak', n: 18,  t: 'REACH A 18 STREAK' } , r: 'legendary' },
+  { id: 'titanorb',   label: 'TITAN ORB',    shape: 'orb',   color: 0x9aa4ad, req: { k: 'wins',       n: 120, t: 'WIN 120 MATCHES' }   , r: 'legendary' },
+
   { id: 'tk_sigil',  label: 'MYTHIC SIGIL', shape: 'orb',   color: 0xff5a3c, req: { k: 'tk', n: 1, t: 'TOKEN EXCLUSIVE' }   , r: 'mythic', tk: 1800 },
 ];
 
@@ -127,6 +180,12 @@ export const TRAILS = [
   { id: 'venom', label: 'VENOM WAKE', color: 0x7dff5a, req: { k: 'wins',       n: 8,  t: 'WIN 8 MATCHES' }   , r: 'epic' },
   { id: 'gold',  label: 'GOLD WAKE',  color: 0xffd75a, req: { k: 'bestStreak', n: 10, t: 'REACH A 10 STREAK' }   , r: 'legendary' },
   // [T110 T2-5] the token-exclusive mythic trail — tk price + the ECO_POOL exclusion (never gambled)
+  // [T161 R32] the 4-deep trail wave (wake-color variants; the §39.3 speed-band law unchanged).
+  { id: 'toxic',  label: 'TOXIC WAKE',  color: 0x8adf3a, req: { k: 'kills',      n: 200, t: '200 ELIMINATIONS' }  , r: 'rare' },
+  { id: 'violet', label: 'VIOLET WAKE', color: 0x8a5cff, req: { k: 'bestStreak', n: 12,  t: 'REACH A 12 STREAK' } , r: 'epic' },
+  { id: 'azure',  label: 'AZURE WAKE',  color: 0x4a8adf, req: { k: 'matches',    n: 200, t: 'PLAY 200 MATCHES' }  , r: 'rare' },
+  { id: 'solar',  label: 'SOLAR WAKE',  color: 0xffd75a, req: { k: 'wins',       n: 90,  t: 'WIN 90 MATCHES' }    , r: 'legendary' },
+
   { id: 'tk_comet', label: 'COMET WAKE', color: 0xff5a3c, req: { k: 'tk', n: 1, t: 'TOKEN EXCLUSIVE' }   , r: 'mythic', tk: 2200 },
 ];
 
@@ -137,6 +196,13 @@ export const EMOTES = [
   { id: 'taunt',  label: 'TAUNT',  text: 'GET REKT',  req: { k: 'kills',      n: 10, t: '10 ELIMINATIONS' }   , r: 'rare' },
   { id: 'salute', label: 'SALUTE', text: 'O7',        req: { k: 'wins',       n: 5,  t: 'WIN 5 MATCHES' }   , r: 'epic' },
   { id: 'flex',   label: 'FLEX',   text: 'IRON FLEX', req: { k: 'bestStreak', n: 6,  t: 'REACH A 6 STREAK' }   , r: 'legendary' },
+  // [T161 R32] the 6-deep emote wave (announce text surface, spec §39.4 verbatim).
+  { id: 'wave',    label: 'WAVE',    text: 'O7 GG',        req: { k: 'matches',    n: 25,  t: 'PLAY 25 MATCHES' }   , r: 'common' },
+  { id: 'ggs',     label: 'GGS',     text: 'GGS ALL',      req: { k: 'matches',    n: 100, t: 'PLAY 100 MATCHES' }  , r: 'common' },
+  { id: 'threat',  label: 'THREAT',  text: 'YOU\'RE NEXT', req: { k: 'kills',      n: 150, t: '150 ELIMINATIONS' }  , r: 'rare' },
+  { id: 'focus',   label: 'FOCUS',   text: 'STAY FOCUSED', req: { k: 'wins',       n: 45,  t: 'WIN 45 MATCHES' }    , r: 'rare' },
+  { id: 'domin',   label: 'DOMIN',   text: 'DOMINATION',   req: { k: 'bestStreak', n: 9,   t: 'REACH A 9 STREAK' }  , r: 'epic' },
+  { id: 'legend',  label: 'LEGEND',  text: 'LEGENDARY',    req: { k: 'kills',      n: 800, t: '800 ELIMINATIONS' }  , r: 'legendary' },
 ];
 
 export function charmById(id) { return CHARMS.find(c => c.id === id) || CHARMS[0]; }
@@ -156,7 +222,7 @@ export const ECO_POOL = [
   ...CHARMS.filter(c => c.id !== 'none' && !c.tk), // [T110] the tk exclusion
   ...TRAILS.filter(t => t.id !== 'none' && !t.tk), // [T110] the tk exclusion
   ...EMOTES.filter(e => e.id !== 'none'),
-]; // 24 items since T90-c (was 20; T93 keeps it 24 — the 20 BPX finishes ride FINISHES + the bundle ∪ law, NOT the pool; [T110] the 4 token rows ride the tksku op, NOT the pool) — every member carries r (ECO_PRICE keyed)
+]; // [T161 R32] 62 pool items (was 24 @T90-c / 36 @T155): +20 fin +8 ch +4 tr +6 em — the mirror recomputes 1:1 by law; every member carries r (ECO_PRICE keyed) — every member carries r (ECO_PRICE keyed)
 export function ecoItemById(id) { // pool member → item; stock ids → null (NEVER a stock fallback)
   if (!id || id === 'default' || id === 'none') return null;
   return ECO_POOL.find(x => x.id === id) || null;

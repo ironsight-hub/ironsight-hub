@@ -16,7 +16,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { CFG, MP_REGIONS, WEAPONS, knockFor } from './config.js'; // T43 §27: registry drives join-time endpoint resolution · [T138] WEAPONS + knockFor join — the kill event's weapon id → the damage-scaled corpse impulse (config single truth)
-import { World } from './world.js';
+import { World, updateGasZone, makeLootPickup, takeLootPickup } from './world.js'; // [T171] the BR zone mirror + the loot manifest renderer ride the world builder
 import { stepState } from './physics.js';
 import { Replay } from './replay.js'; // T42 §26: transform replay capture (client-side only; inert unless ?replay=1)
 import { finishById, trailById, emoteById } from './cosmetics.js'; // T2-5 Phase 2+3 (T48a/T55): pure defs — remote capsule tint + trail/emote ids (no cycle: cosmetics imports nothing)
@@ -57,6 +57,22 @@ mp.lastEnd = null; // Task 35: last match end event (board[] probe surface)
 mp.lastFlash = null; // Task 35: last flash event (probe surface: v[] + mineStr)
 mp.killcamHide = false; // G-2: killcam isolates the replay cast — live remote meshes gate on this (main.js owns the flag; nametag rides the mesh)
 
+// [T148] median snap ARRIVAL interval (ms) — 1 Hz recompute off the snapTimes ring; 0 = no
+// cadence yet (the floor delay covers it). Burst arrivals (polling fallback, mobile radios)
+// inflate the median, so the interp delay stretches exactly when the stream turns bursty —
+// the anti-sawtooth law behind the adaptive interp delay (frame()).
+let snapMedMs = 0, snapMedT = 0;
+function medianSnapMs(now) {
+  if (now - snapMedT > 1000 && snapTimes.length >= 4) {
+    snapMedT = now;
+    const ds = [];
+    for (let i = 1; i < snapTimes.length; i++) ds.push(snapTimes[i] - snapTimes[i - 1]);
+    ds.sort((a, b) => a - b);
+    snapMedMs = ds[Math.floor(ds.length / 2)] || 0;
+  }
+  return snapMedMs;
+}
+
 function loadScript(src) {
   return new Promise((res, rej) => {
     const s = document.createElement('script');
@@ -72,6 +88,26 @@ function loadScript(src) {
 // server AND the /ao_is/-prefixed mount) with zero config — the four loadScript sites ride this.
 const SIO_SRC = new URL('vendor/socket.io.min.js', document.baseURI).href;
 
+// [T148] THE QUIET-CLOSE LAW — socket.close() stops THIS socket, but the manager's
+// reconnection timer (socket.io default reconnection:true, Infinity attempts) can keep a dead
+// dial polling in the background: the T148 live log caught the same-origin 302/CORS cycle
+// repeating across the connect window. Disarm the manager FIRST, then close — a dead dial
+// dies exactly once (live carriers keep their manager; only these teardown sites call this).
+function killSocket(s) {
+  if (!s) return;
+  try { if (s.io && typeof s.io.reconnection === 'function') s.io.reconnection(false); } catch (_) {}
+  try { s.close(); } catch (_) {} // [T146] the original close hygiene, now manager-disarmed
+}
+
+// [T148] the local-host test for the straight-dial law — PURE (host injected, the
+// resolveRegion contract): loopback + RFC1918 LAN keep the legacy 'auto' derivation
+// byte-identical (dev self-hosts that DO strip the mount); every other https host is static.
+function isLocalHost(host) {
+  if (typeof host !== 'string') return false;
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.localhost') ||
+    /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+}
+
 let mpOpts = null;      // initMP opts (handlers rebind on transport fallback)
 let fallbackDone = false;
 
@@ -82,6 +118,7 @@ export function initMP(opts) {
   mp.pid = (typeof opts.pid === 'string' && opts.pid) ? opts.pid : null; // T44 §28.1: persistent device identity; absent = anonymous (pre-T44 bytes)
   mp.profile = null; // T44 §28.3: server-truth career profile (joined.profile)
   mp.ranked = null; // T46 §30.6: server-truth ranked view (joined.ranked) — null = anonymous/old server (corner RANK row hidden)
+  mp.vars = null; // §55 [T173]: server-truth per-user bag (the 'vars' channel; null = never fetched / offline — the session-bag law keeps this OUT of career)
   mp.priv = opts.priv === true; mp.codeWanted = (typeof opts.code === 'string' && opts.code) ? opts.code.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) : null; // T45 §29.3: private create / join-by-code ride initMP (?priv=1 / ?code=XXXXXX); absent = public, pre-T45 bytes
   Replay.arm(!!opts.replay, { room: CFG.MP.room, map: 'outpost' }); // T42 §26.1: recording arm (?mp=1&replay=1); flag OFF = module inert
   player = opts.player; scene = opts.scene;
@@ -119,6 +156,18 @@ export function resolveRegion(settings, host, proto) {
     } catch (_) { return { url: CFG.MP.server, fellBack: true, why: 'custom endpoint is not a valid URL' }; }
   }
   if (reg && typeof reg.endpoint === 'string' && /^https?:\/\//.test(reg.endpoint)) return { url: reg.endpoint, fellBack: false }; // [T114] the fleet law grows the direct row — an ABSOLUTE http(s) endpoint in MP_REGIONS is the row's own dial (the free hosted hub Space; dialTarget hands it to io() verbatim with the service's root path, no mount prefix involved)
+  // [T148] THE STRAIGHT-DIAL LAW ('auto' edition) — a relative 'auto' value is a same-origin
+  // MOUNT (CFG.MP.server '/room'), and on every host this game ships on (HF Pages, the z.ai
+  // preview shell — neither proxies /room) that mount 302s into a CORS wall: the T148 live log
+  // caught FOUR poll/WS failure cycles (a ~15-25s 'connecting' face) before the dead-mount heal
+  // fired. Old saves KEEP mpRegion:'auto' by the default-merge law, so every legacy session
+  // paid the storm once per browser. A SECURE page on a non-local host can never answer the
+  // mount — resolve it STRAIGHT to the first absolute row (render) and REPORT the re-route
+  // (the fellBack contract); dev (http / loopback / LAN) keeps the legacy derivation verbatim.
+  if (proto === 'https:' && !isLocalHost(host)) {
+    const abs = MP_REGIONS.find(r => typeof r.endpoint === 'string' && /^https?:\/\//.test(r.endpoint));
+    if (abs) return { url: abs.endpoint, fellBack: true, why: "auto on a static https host — the same-origin mount can't answer there, dialing " + abs.id + ' directly' };
+  }
   return { url: CFG.MP.server, fellBack: false }; // 'auto' + unknown ids
 }
 
@@ -127,13 +176,21 @@ export function resolveRegion(settings, host, proto) {
 // report) and MUST NOT attempt the plain-HTTP :3010 fallback (the room service has no
 // TLS — the attempt would fail anyway, and as ws:// it gets browser-blocked first).
 // Returns the per-context dial plan:
-//   https → polling-first transports (XHR rides the secure origin; engine.io ≥6.5 —
-//           socket.io 4.7+, our vendor is 4.8.4 — tries the list IN ORDER and upgrades
-//           to ws only after connect) + the direct :3010 fallback FORBIDDEN (null)
+//   https → wss-FIRST transports + the direct :3010 fallback FORBIDDEN (null)
 //   http  → the legacy plan byte-identical (websocket-first + the http:// :3010 fallback)
+// [T147] THE ORDER LAW — BOTH branches are websocket-first now. The T146 live report
+// proved polling-first strands real sessions on long-poll: the engine's UPGRADE probe
+// ("closed before the connection is established") never lands on high-RTT hosts, so every
+// snapshot arrives in BURSTS one poll-RTT apart — onSnap recomputes the reconcile recon
+// per burst and the §8 correction blend yanks the predicted player each time (the
+// movement-stutter report, verbatim). ws-first dials the good transport DIRECTLY (the T144
+// wire probe already proved the hub upgrades websocket from the game's own origin);
+// tryAllTransports:true (rides every io() call site) keeps the honest fallback — an
+// environment that blocks wss (sandboxed preview iframes, corporate proxies) fails over
+// to polling exactly once per connect, the same one console line it logged before.
 export function dialPlan(pageProto) {
   return pageProto === 'https:'
-    ? { transports: ['polling', 'websocket'], directFallback: null }
+    ? { transports: ['websocket', 'polling'], directFallback: null }
     : { transports: ['websocket', 'polling'], directFallback: 'http://' };
 }
 
@@ -149,6 +206,22 @@ export function dialTarget(server) {
     return { url: '/', path: server.replace(/\/+$/, '') + '/socket.io/' };
   }
   return { url: server, path: null };
+}
+
+// [T146] THE DEAD-MOUNT AUTO-HEAL — the user's own loop ("says connecting then loops to home,
+// a few times"): a RELATIVE region value ('auto' → CFG.MP.server '/room') is a SAME-ORIGIN
+// MOUNT — on a static page NOTHING strips it, the dial 404s forever. resolveRegion already
+// prefers an absolute row; the heal closes the loop for SAVES still storing a relative id:
+// flip mpRegion to the first absolute endpoint row, persist through the SAME settingsChanged
+// channel the chip uses, and return the re-dial URL (null = nothing to heal — honest face).
+function healDeadMount(settings) {
+  if (!settings) return null;
+  const abs = MP_REGIONS.find(r => typeof r.endpoint === 'string' && /^https?:\/\//.test(r.endpoint));
+  if (!abs || settings.mpRegion === abs.id) return null;
+  settings.mpRegion = abs.id;
+  try { if (typeof mpOpts.settingsChanged === 'function') mpOpts.settingsChanged(); } catch (_) {} // persistence rides main's applySettings (the chip's own channel)
+  console.warn('p] dead-mount auto-heal: mpRegion -> ' + abs.id + ' (' + abs.endpoint + ')');
+  return abs.endpoint;
 }
 
 // §27.2: live region ping — TEMPORARY socket.io connection reusing the EXISTING unguarded
@@ -172,7 +245,7 @@ export function mpPingRegion(url, opts = {}) {
     const samples = [];
     let timer = null, settle = null;
     const dt = dialTarget(url); // [T129] the anywhere dial law (mount prefix → io('/',{path}))
-    const s = io(dt.url, { path: dt.path || '/socket.io/', transports: dialPlan(location.protocol).transports, forceNew: true, timeout: connectTimeoutMs, reconnection: false }); // verbatim openSocket pattern + probe hygiene · [T122] (5) the secure-dial transports
+    const s = io(dt.url, { path: dt.path || '/socket.io/', transports: dialPlan(location.protocol).transports, tryAllTransports: true, forceNew: true, timeout: connectTimeoutMs, reconnection: false }); // verbatim openSocket pattern + probe hygiene · [T122] (5) the secure-dial transports · [T147] try-all rides here too
     s.on('connect', () => {
       s.on('pong', d => { const rtt = performance.now() - d.t; samples.push(rtt); onSample(rtt); });
       let sent = 0;
@@ -202,7 +275,7 @@ export function mpLeaderboard(url, opts = {}) {
   };
   const boot = () => {
     const dt = dialTarget(url); // [T129] the anywhere dial law (mount prefix → io('/',{path}))
-    const s = io(dt.url, { path: dt.path || '/socket.io/', transports: dialPlan(location.protocol).transports, forceNew: true, timeout: 4000, reconnection: false }); // verbatim openSocket pattern + probe hygiene · [T122] (5) the secure-dial transports
+    const s = io(dt.url, { path: dt.path || '/socket.io/', transports: dialPlan(location.protocol).transports, tryAllTransports: true, forceNew: true, timeout: 4000, reconnection: false }); // verbatim openSocket pattern + probe hygiene · [T122] (5) the secure-dial transports · [T147] try-all rides here too
     const timer = setTimeout(() => finish(s, null, { url, error: 'timeout', s: null, endsAt: null, rows: [], self: null }), 6000);
     s.on('connect', () => s.emit('lb', { pid: mp.pid || undefined, n: 25, sc: opts.sc || undefined })); // pid absent = anonymous query (pre-T44 bytes from the server's view); invalid pid = server drops it (§28.3 law) · [T139] sc passthrough — the ladder scope (rp default / friends / clan)
     s.on('lb', d => finish(s, timer, { url, error: null, ...(d && typeof d === 'object' ? d : { s: null, endsAt: null, rows: [], self: null }) }));
@@ -245,11 +318,13 @@ export function ensureIo(settings, onDone) {
     const reg = resolveRegion(settings, location.hostname, location.protocol); // §27.4 — the same derivation openSocket uses (region state rides the label) · [T122] (5) the proto rides
     if (reg.fellBack) console.warn('p] ensureIo region: ' + reg.why + ' — using default endpoint');
     const dt = dialTarget(url); // [T129] the anywhere dial law (mount prefix → io('/',{path}))
-    const s = io(dt.url, { path: dt.path || '/socket.io/', transports: dialPlan(location.protocol).transports, forceNew: true, timeout: 10000 }); // verbatim openSocket pattern · [T122] (5) the secure-dial transports
+    const s = io(dt.url, { path: dt.path || '/socket.io/', transports: dialPlan(location.protocol).transports, tryAllTransports: true, forceNew: true, timeout: 10000 }); // verbatim openSocket pattern · [T122] (5) the secure-dial transports · [T147] the ORDER law rides dialPlan + the try-all fallback
+    s.__dial = dt.url + '|' + (dt.path || '/socket.io/'); // [T147] the adoption fingerprint — openSocket's single-transport law reads this
+    s.__menuWired = true; // [T147] the four menu mirrors below are THIS socket's own wiring — wireGameHandlers must not double them on adoption
     s.on('connect', () => {
       s.__t120live = true;
       mp.connected = true;
-      console.log('p] ensureIo connected', s.id, 'via', url);
+      console.log('p] ensureIo connected', s.id, 'via', url, '· transport', (s.io && s.io.engine && s.io.engine.transport && s.io.engine.transport.name) || '?'); // [T148] the transport truth line
       if (AUTH.tok) s.emit('auth', { op: 'me', tok: AUTH.tok }); // stays-signed-in law [j_02] — the menu session mirror
       settle(s, null);
     });
@@ -263,6 +338,8 @@ export function ensureIo(settings, onDone) {
         const df = dialPlan(location.protocol).directFallback; // [T122] (5) the secure-dial law: a TLS page NEVER fires the insecure :3010 attempt (the browser blocks it — the user's mixed-content report)
         if (!df) {
           console.warn('p] ensureIo gateway unreachable (' + ((e && e.message) || e) + ') — SECURE PAGE: the direct :3010 fallback is insecure-only, skipped (the room service has no TLS)');
+          const healed = healDeadMount(settings); // [T146] the same dead-mount heal, menu path — the waiters stay armed and settle on the healed dial's outcome (the fallback law verbatim)
+          if (healed) { killSocket(s); bootAt(healed); return; } // [T148] quiet-close
           settle(s, 'connect: ' + ((e && e.message) || e) + ' (secure page — direct :3010 skipped)');
           return;
         }
@@ -270,7 +347,7 @@ export function ensureIo(settings, onDone) {
         // a dev static server cannot proxy it — ONE direct :3010 attempt, never on a direct/custom URL.
         // The waiters stay armed across the fallback and settle on ITS outcome.
         console.warn('p] ensureIo gateway unreachable (' + ((e && e.message) || e) + ') — one direct :3010 attempt');
-        try { s.close(); } catch (_) {}
+        killSocket(s); // [T148] quiet-close
         bootAt(df + location.hostname + ':3010');
         return;
       }
@@ -280,9 +357,10 @@ export function ensureIo(settings, onDone) {
     // menu mirrors — the openSocket delegation verbatim (senders emit, mirrors deliver)
     s.on('auth', (d) => { if (mp.onAuth) mp.onAuth(d); });
     s.on('eco', (d) => { if (mp.onEco) mp.onEco(d); });
+    s.on('vars', (d) => { if (d && d.vars) mp.vars = d.vars; if (mp.onVars) mp.onVars(d); }); // §55 [T173]: the bag self-stores + the optional hook mirrors onEco
     s.on('soc', (d) => { if (mp.onSoc) mp.onSoc(d); });
     s.on('queue', (d) => { if (mp.onQueue) mp.onQueue(d); });
-    try { if (socket) socket.close(); } catch (_) {} // a dead/retrying openSocket never fights the menu transport
+    if (socket) killSocket(socket); // [T148] quiet-close — a dead/retrying openSocket never fights the menu transport
     socket = s; // THE single-socket law: every existing sender lights up the moment this lands
   };
   // the §27.2 loader law: the offline menu never ran initMP — socket.io boots ON DEMAND here
@@ -296,9 +374,10 @@ export function ensureIo(settings, onDone) {
 // re-emit the SAME payload through THIS body; the pow token rides additively (UNARMED hubs
 // never see it: undefined drops = pre-T140 join bytes, the §32.2 law).
 function sendJoin() {
+  // [T155 R6] slo rides the join payload — the streak equip, 3 def indices (absent = server default = pre-T155 bytes)
   const L = mpOpts.loadout ? mpOpts.loadout() : null;
   socket.emit('join', { name: 'YOU',
- token: token || undefined, room: CFG.MP.room, ab: L ? L.ability : 'dash', ld: L ? { w: L.weapon, s: L.secondary, at: L.attachments } : undefined, fin: L ? L.finish : undefined, trl: L ? L.trail : undefined, op: (L && L.op) ? L.op : undefined, spec: mp.wantSpec || undefined, pid: authPid() || undefined, priv: mp.priv || undefined, code: mp.codeWanted || undefined, pow: mp.powTok || undefined }); // MP-3: room id + ability; T40 §24: loadout; T48a: finish id; T55 §39.3: trail id (both server-validated, additive); [T108 N8]: operator id (server-validated vs the operators.js roster — the cos.FINISHES join-validator law; absent = pre-N8 bytes); T41 §25.1: spectate role (absent = player, byte-identical old path); T44 §28.1: pid (absent = dropped from payload); T45 §29.3: priv/code (absent = dropped = pre-T45 join bytes); [T140]: pow (absent = dropped = pre-T140 bytes)
+ token: token || undefined, room: CFG.MP.room, ab: L ? L.ability : 'dash', ld: L ? { w: L.weapon, s: L.secondary, at: L.attachments } : undefined, fin: L ? L.finish : undefined, trl: L ? L.trail : undefined, op: (L && L.op) ? L.op : undefined, spec: mp.wantSpec || undefined, slo: (L && Array.isArray(L.streaks) && L.streaks.length === 3) ? L.streaks : undefined, pid: authPid() || undefined, priv: mp.priv || undefined, code: mp.codeWanted || undefined, pow: mp.powTok || undefined }); // MP-3: room id + ability; T40 §24: loadout; T48a: finish id; T55 §39.3: trail id (both server-validated, additive); [T108 N8]: operator id (server-validated vs the operators.js roster — the cos.FINISHES join-validator law; absent = pre-N8 bytes); T41 §25.1: spectate role (absent = player, byte-identical old path); T44 §28.1: pid (absent = dropped from payload); T45 §29.3: priv/code (absent = dropped = pre-T45 join bytes); [T140]: pow (absent = dropped = pre-T140 bytes)
 }
 
 // [T140] the PoW solver — sha256(salt:i) whose HEX digest carries ≥nib leading zero nibbles
@@ -326,16 +405,41 @@ function requestCustomMap() {
 
 function openSocket(url) {
   // verbatim connection pattern from the host demo + Spike 0 (path '/' is a Caddy requirement)
-  const dp = dialPlan(location.protocol); // [T122] (5) the secure-dial law — polling-first on TLS pages (XHR rides the secure origin; ws upgrade attempted after connect)
+  const dp = dialPlan(location.protocol); // [T147] the ORDER law — websocket-first on BOTH schemes (tryAllTransports keeps the polling fallback honest)
   const dt = dialTarget(url); // [T129] the anywhere dial law — relative server = mount prefix via the path option (a bare '/room' would parse as a NAMESPACE)
-  socket = io(dt.url, { path: dt.path || '/socket.io/', transports: dp.transports, forceNew: true, timeout: 10000 });
-  socket.on('connect', () => {
+  const dial = dt.url + '|' + (dt.path || '/socket.io/'); // [T147] the adoption fingerprint (endpoint + mount path)
+  // [T147] THE SINGLE-TRANSPORT LAW — the live report caught TWO managers dialed at the hub
+  // simultaneously (ensureIo's menu socket + openSocket's game socket — the two 'connected'
+  // sids in the console) and a THIRD session's WS-upgrade corpse: the menu-first flow (hub
+  // queue → join) never closed what ensureIo opened, so the game dialed a second parallel
+  // transport — double hub sessions, a stray upgrade probe per manager, two reconnect loops
+  // on any blip. A live menu transport that already dials THIS endpoint is ADOPTED (the game
+  // handlers wire onto it once; the join emit re-runs through the SAME sendJoin body); any
+  // other socket is closed before the game's dial — one endpoint, one transport, one rejoin loop.
+  if (socket && socket.connected && socket.__dial === dial) {
+    if (!socket.__mpGame) { socket.__mpGame = true; wireGameHandlers(socket, url); voiceSetSocket(socket); sendJoin(); }
+    else sendJoin(); // a re-dial through the same live socket IS a rejoin (the disconnect law below only re-opens a truly dead transport)
+    return;
+  }
+  if (socket) killSocket(socket); // [T148] quiet-close — a different endpoint's transport must not fight the game's dial
+  socket = io(dt.url, { path: dt.path || '/socket.io/', transports: dp.transports, tryAllTransports: true, forceNew: true, timeout: 10000 });
+  socket.__dial = dial;
+  wireGameHandlers(socket, url);
+}
+
+// [T147] the game handler set, EXTRACTED from openSocket — one body serves both the fresh-dial
+// path and the adopted-transport path (the single-body law the join emit already obeys). `s` is
+// the carrying socket; module-level senders keep reading the `socket` var, which is ALWAYS the
+// live carrier by the time any event fires (single-threaded assignment precedes every event).
+function wireGameHandlers(s, url) {
+  s.on('connect', () => {
     mp.connected = true;
-    console.log('p] connected', socket.id, 'via', url);
-    voiceSetSocket(socket); // [T140 G-4] the socket lifecycle handoff — a NEW socket releases the old capture chain (the voice.js law)
+    console.log('p] connected', s.id, 'via', url, '· transport', (s.io && s.io.engine && s.io.engine.transport && s.io.engine.transport.name) || '?'); // [T148] the transport truth line — stutter triage reads this, no more guesswork
+    voiceSetSocket(s); // [T140 G-4] the socket lifecycle handoff — a NEW socket releases the old capture chain (the voice.js law)
     sendJoin(); // [T140] the extracted single body — the join payload lives in ONE place (the PoW retry reuses it verbatim)
   });
-  socket.on('joined', d => {
+  try { s.io.on('upgrade', t => console.log('p] transport upgrade ->', t.name)); } catch (_) {} // [T148] the upgrade truth — websocket landing here is the anti-stutter law's green light
+  s.on('joined', d => {
     mp.joined = true; myId = d.id; token = d.token; mp.myId = d.id;
     mp.spec = !!d.spec; // T41 §25.1: role is SERVER-TRUTH (old server never sets it → player path)
     mp.myRoom = d.room || null; mp.privCode = d.code || null; // T45 §29.3: real room id (a private code IS the room id) + server-truth privacy from the ack
@@ -348,7 +452,7 @@ function openSocket(url) {
     if (pingTimer) clearInterval(pingTimer);
     pingTimer = setInterval(() => socket.emit('ping', { t: performance.now() }), 1000);
   });
-  socket.on('joinErr', (d) => { // [T140] the honest join face + the PoW auto-solve (invisible when armed: solve → rejoin through the SAME sendJoin body; the user never sees the math)
+  s.on('joinErr', (d) => { // [T140] the honest join face + the PoW auto-solve (invisible when armed: solve → rejoin through the SAME sendJoin body; the user never sees the math)
     d = d || {};
     if (d.why === 'pow' && d.salt && Number(d.nib) > 0) {
       solvePow(String(d.salt), Math.min(14, d.nib | 0)).then((tok) => {
@@ -360,24 +464,24 @@ function openSocket(url) {
     }
     if (typeof mpOpts.onJoinErr === 'function') mpOpts.onJoinErr(d);
   });
-  socket.on('voice', (d) => voiceOnPacket(d)); // [T140 G-4] the relay leg — {i,s,a} with the SERVER-STAMPED sender actor id (a spoofed i never existed)
-  socket.on('mapdata', (d) => { // [T140 G-3] the registered authored stage lands → the roster entry replaces in place → the world rebuilds through the SAME setMap law
+  s.on('voice', (d) => voiceOnPacket(d)); // [T140 G-4] the relay leg — {i,s,a} with the SERVER-STAMPED sender actor id (a spoofed i never existed)
+  s.on('mapdata', (d) => { // [T140 G-3] the registered authored stage lands → the roster entry replaces in place → the world rebuilds through the SAME setMap law
     if (!d || !d.data || !d.data.blocks) return;
     if (Maps.customWire(d.data) && Maps.currentId !== 'custom' && typeof mpOpts.onWireMap === 'function') mpOpts.onWireMap('custom');
   });
-  socket.on('snap', onSnap);
-  socket.on('pong', d => { mp.stats.rttEcho = performance.now() - d.t; });
+  s.on('snap', onSnap);
+  s.on('pong', d => { mp.stats.rttEcho = performance.now() - d.t; });
   // MP-2 combat verdicts (server-authoritative; FX routed through opts callbacks — main.js owns hud/match/SFX)
-  socket.on('dmg', m => {
+  s.on('dmg', m => {
     if (m.a === myId) mp.stats.hits = (mp.stats.hits || 0) + 1; // T40: per-damaging-event hit count (offline shotsHit convention) — feeds MP career accuracy
     if (!mpOpts.onHitConfirm && !mpOpts.onHurt) return;
     if (m.a === myId) { if (mpOpts.onHitConfirm) mpOpts.onHitConfirm({ dmg: m.dmg, head: m.head, kill: m.kill, name: m.vn }); }
     else if (m.v === myId) { if (mpOpts.onHurt) mpOpts.onHurt({ dmg: m.dmg, head: m.head, fx: m.fx }); }
   });
-  socket.on('ammo', m => { // T40 §24: server-authoritative ammo correction (empty-fire / reload / respawn sync)
+  s.on('ammo', m => { // T40 §24: server-authoritative ammo correction (empty-fire / reload / respawn sync)
     if (mpOpts.onAmmo) mpOpts.onAmmo(m);
   });
-  socket.on('kill', k => {
+  s.on('kill', k => {
     if (mpOpts.onKill) mpOpts.onKill({ kn: k.kn, vn: k.vn, v: k.v, k: k.k, w: k.w, h: k.h, mine: k.k === myId, theirs: k.v === myId, kid: k.k == null ? null : k.k }); // G-2: kid rides — the killcam locates the killer's replay ref by id · [T138] v + k ride — the corpse wire needs the victim id (main feeds MY kills) and the killer id (this listener feeds the remote-killer legs)
     if (k && k.v != null && k.v !== myId && k.k != null && k.k !== myId) { // [T138] THE REMOTE-KILLER LEG — neither end is me: the killer's last interpolated transform IS the death direction (main's onKill feeds the killer=me legs with the exact player pos)
       const kr = remotes.get(k.k);
@@ -385,7 +489,7 @@ function openSocket(url) {
     }
   });
   // MP-3: server match lifecycle (start/live/flag/end/lobby) — client mirrors + announces
-  socket.on('match', d => {
+  s.on('match', d => {
     mp.matchState = d;
     mp.inLiveMatch = d.ev === 'start' || d.ev === 'live'; // T2-12: gates lobby announces on roster
     if (d.ev === 'end' && Array.isArray(d.board)) {
@@ -395,16 +499,16 @@ function openSocket(url) {
     if (mpOpts.onMatch) mpOpts.onMatch({ ...d, mine: d.winner ? d.winner === myId : undefined });
   });
   // --- MP-3.1 residuals (Task 33): server-owned grenades / streaks / abilities / srtt / host ---
-  socket.on('sping', d => socket.emit('spong', { t: d && d.t })); // T2-11: raw upstream reply (no chain client-side)
-  socket.on('nadeSpawn', d => { if (mpOpts.onNadeSpawn) mpOpts.onNadeSpawn(d); }); // T2-9: visual via THE weapons projectile path
-  socket.on('boom', d => { if (mpOpts.onBoom) mpOpts.onBoom(d); }); // T2-9/T2-10: authoritative detonation FX+audio
-  socket.on('crate', d => { if (mpOpts.onCrate) mpOpts.onCrate(d); }); // T2-10: supply crate visual
-  socket.on('supply', d => { if (mpOpts.onSupply) mpOpts.onSupply({ ...d, mine: d.by === myId }); }); // T2-10: landed → owner refill
-  socket.on('dest', d => { if (mpOpts.onDestNet) mpOpts.onDestNet(d); }); // §54.5 U7: server-owned destructible truth (additive; old servers never send → never fires)
-  socket.on('streakEv', d => { if (mpOpts.onStreakEv) mpOpts.onStreakEv(d); }); // T2-10: UAV/AIRSTRIKE announcements
-  socket.on('pulseEv', () => { for (const r of remotes.values()) r.spotT = 0; }); // T2-10: reveal (announce already local via useAbility)
+  s.on('sping', d => socket.emit('spong', { t: d && d.t })); // T2-11: raw upstream reply (no chain client-side)
+  s.on('nadeSpawn', d => { if (mpOpts.onNadeSpawn) mpOpts.onNadeSpawn(d); }); // T2-9: visual via THE weapons projectile path
+  s.on('boom', d => { if (mpOpts.onBoom) mpOpts.onBoom(d); }); // T2-9/T2-10: authoritative detonation FX+audio
+  s.on('crate', d => { if (mpOpts.onCrate) mpOpts.onCrate(d); }); // T2-10: supply crate visual
+  s.on('supply', d => { if (mpOpts.onSupply) mpOpts.onSupply({ ...d, mine: d.by === myId }); }); // T2-10: landed → owner refill
+  s.on('dest', d => { if (mpOpts.onDestNet) mpOpts.onDestNet(d); }); // §54.5 U7: server-owned destructible truth (additive; old servers never send → never fires)
+  s.on('streakEv', d => { if (mpOpts.onStreakEv) mpOpts.onStreakEv(d); }); // T2-10: UAV/AIRSTRIKE announcements
+  s.on('pulseEv', () => { for (const r of remotes.values()) r.spotT = 0; }); // T2-10: reveal (announce already local via useAbility)
   // --- Task 35: residual-of-residuals — flash broadcast + remote fired reveal ---
-  socket.on('flash', d => {
+  s.on('flash', d => {
     // server computed per-victim strength (doFlash verbatim: LoS + facing + distance);
     // FX/audio for everyone in the room, the blind overlay only for tagged victims
     try {
@@ -415,18 +519,22 @@ function openSocket(url) {
       mp.lastFlash = fl;
     } catch (e) { mp.lastFlash = { err: String((e && e.stack) || e) }; } // Task 35 probe: handler-throw forensics
   });
-  socket.on('fired', d => {
+  s.on('fired', d => {
     // hud.js:197 seeEnemy parity — a validated unsuppressed remote fire lights the
     // minimap dot for 1.3s (bots.js:342 firedT=0 mirror; decay in frame())
     if (d && d.id && d.id !== myId) { const r = remotes.get(d.id); if (r) r.firedT = 0; }
   });
-  socket.on('matchErr', d => { if (mpOpts.onMatchErr) mpOpts.onMatchErr(d || {}); }); // T2-12: notHost etc.
-  socket.on('auth', (d) => { if (mp.onAuth) mp.onAuth(d); });
-  socket.on('eco', (d) => { if (mp.onEco) mp.onEco(d); });
-  socket.on('soc', (d) => { if (mp.onSoc) mp.onSoc(d); });
-  socket.on('queue', (d) => { if (mp.onQueue) mp.onQueue(d); });
+  s.on('matchErr', d => { if (mpOpts.onMatchErr) mpOpts.onMatchErr(d || {}); }); // T2-12: notHost etc.
+  if (!s.__menuWired) { // [T147] an ADOPTED menu socket already carries the four mirrors (ensureIo wired them) — double registration = double delivery
+    s.on('auth', (d) => { if (mp.onAuth) mp.onAuth(d); });
+    s.on('eco', (d) => { if (mp.onEco) mp.onEco(d); });
+    s.on('vars', (d) => { if (d && d.vars) mp.vars = d.vars; if (mp.onVars) mp.onVars(d); }); // §55 [T173]: the adopted-menu mirror — same self-store + hook (double registration guarded by __menuWired)
+    s.on('soc', (d) => { if (mp.onSoc) mp.onSoc(d); });
+    s.on('queue', (d) => { if (mp.onQueue) mp.onQueue(d); });
+    s.__menuWired = true;
+  }
   if (AUTH.tok) socket.emit('auth', { op: 'me', tok: AUTH.tok }); // stays-signed-in law [j_02]
-  socket.on('roster', d => {
+  s.on('roster', d => {
     if (d.map) Replay.setMapLabel(d.map); // §51.3: replay map label (armed-gated inside)
     if (d.map === 'custom' && !mp.inLiveMatch && Maps.currentId !== 'custom') { // [T140 G-3] the room sits on the authored stage — the host rebuilds from its LS original, joiners PULL the registered data (the server is the single truth for everyone else)
       if (d.meHost) { const ce = Maps.customEntry(); if (ce && ce.custom && typeof mpOpts.onWireMap === 'function') mpOpts.onWireMap('custom'); }
@@ -441,15 +549,16 @@ function openSocket(url) {
     for (const [id, r] of remotes) { applyFinish(r, mp.cf.get(id)); applyTrail(r, mp.ct.get(id)); } // live re-tint + trail resolve on roster updates
     if (mpOpts.onRoster && !mp.inLiveMatch) mpOpts.onRoster({ ...d, meHost: d.host === myId });
   }); // T2-12
-  socket.on('career', d => { if (typeof mpOpts.onCareer === 'function') mpOpts.onCareer(d || {}); }); // T44 §28.3: per-socket XP award at match end (absent on old servers = never fires)
-  socket.on('ranked', d => { if (typeof mpOpts.onRanked === 'function') mpOpts.onRanked(d || {}); }); // T46 §30.6: per-socket ranked award, ranked matches only (absent on old servers = dormant; mirror of onCareer pattern)
-  socket.on('emote', d => { // T55 §39.4: remote taunt → announce (old servers never send this event; §24/§32 additive law)
+  s.on('career', d => { if (typeof mpOpts.onCareer === 'function') mpOpts.onCareer(d || {}); }); // T44 §28.3: per-socket XP award at match end (absent on old servers = never fires)
+  s.on('ranked', d => { if (typeof mpOpts.onRanked === 'function') mpOpts.onRanked(d || {}); }); // T46 §30.6: per-socket ranked award, ranked matches only (absent on old servers = dormant; mirror of onCareer pattern)
+  s.on('emote', d => { // T55 §39.4: remote taunt → announce (old servers never send this event; §24/§32 additive law)
     if (!d || typeof d.id !== 'string') return;
     const e = emoteById(d.id);
     if (e.id === 'none' || typeof mpOpts.onEmote !== 'function') return; // garbage/'none' = silent
     mpOpts.onEmote({ text: e.text, n: typeof d.n === 'string' ? d.n.slice(0, 16) : 'PLAYER' }); // name-length law matches snapshot names
   });
-  socket.on('disconnect', (why) => { mp.connected = false; mp.ready = false; voiceReset(); console.log('p] disconnected', why || ''); // [T140 G-4] voice.reset — playback state dies with the socket (the capture permission stays sticky-honest)
+  s.on('disconnect', (why) => { if (s !== socket) return; // [T147] the identity guard — a CLOSED predecessor's late disconnect must not re-dial over the live carrier
+    mp.connected = false; mp.ready = false; voiceReset(); console.log('p] disconnected', why || ''); // [T140 G-4] voice.reset — playback state dies with the socket (the capture permission stays sticky-honest)
     // [T141] THE ONE-SHOT HONEST REJOIN — reconnection:false is the probe-hygiene dial, but a LIVE
     // round must not strand its player on a transport blip (the "online always had errors" class):
     // the connect handler above re-runs sendJoin through the SAME single body (the PoW solve loop
@@ -457,21 +566,26 @@ function openSocket(url) {
     // keeps its honest face (the connect-fail line + the RETRY chip carry it from there).
     if (mp.joined && rejoinTries < 2 && !mp.spec) {
       mp.joined = false; rejoinTries++;
-      setTimeout(() => { try { if (!socket || socket.disconnected) openSocket(CFG.MP.server); } catch (e) { console.warn('p] rejoin dial failed', e && e.message); } }, 1500);
+      setTimeout(() => { try { if (!socket || socket.disconnected) { const rurl = resolveRegion(mpOpts.settings, location.hostname, location.protocol).url; openSocket(rurl); } } catch (e) { console.warn('p] rejoin dial failed', e && e.message); } }, 1500); // [T146] THE REJOIN LAW — re-RESOLVE the region at rejoin time; the old openSocket(CFG.MP.server) re-dialed the dead '/room' mount regardless of the live region, stranding the round local-only (the stutter + empty-room report)
     }
   });
   // Task 35 probe: wire-level receive tally (which events does THIS socket actually get?)
-  socket.onAny((ev, ...args) => { if (!mp.rx) mp.rx = {}; mp.rx[ev] = (mp.rx[ev] || 0) + 1; if (Replay.armed) Replay.onWire(ev, args); }); // T42 §26.1: ONE appended capture point — no per-handler edits
+  s.onAny((ev, ...args) => { if (!mp.rx) mp.rx = {}; mp.rx[ev] = (mp.rx[ev] || 0) + 1; if (Replay.armed) Replay.onWire(ev, args); }); // T42 §26.1: ONE appended capture point — no per-handler edits · [T147] binds the carrier, not the module var
   // transport fallback (Task 32): the Caddy gateway (:81) fronts the public preview origin;
   // a dev static server on :3000 has NO websocket support — fall back ONCE to direct :3010.
   // On the preview origin the gateway works, so the fallback never fires there.
-  socket.on('connect_error', (e) => {
-    if (fallbackDone || url !== CFG.MP.server) return;
+  s.on('connect_error', (e) => {
+    if (s !== socket || fallbackDone || url !== CFG.MP.server) return; // [T147] the identity guard rides first — a closed predecessor's error never hijacks the live carrier
     fallbackDone = true;
     const df = dialPlan(location.protocol).directFallback; // [T122] (5) the secure-dial law — the JOIN path obeys it too (a TLS page never fires the insecure :3010 attempt)
-    if (!df) { console.warn('p] gateway unreachable — SECURE PAGE: the direct :3010 fallback is insecure-only, skipped'); return; }
+    if (!df) { // [T146] the dead-mount auto-heal — a relative mount on a static page can never answer; flip to the first live absolute row and re-dial ONCE (fallbackDone stays true — a healed dial that also fails keeps the honest face, no loop)
+      console.warn('p] gateway unreachable — SECURE PAGE: the direct :3010 fallback is insecure-only, skipped');
+      const healed = healDeadMount(mpOpts.settings);
+      if (healed) { killSocket(s); openSocket(healed); } // [T148] quiet-close — stops the dead mount's manager retries for good
+      return;
+    }
     console.warn('[mp] gateway unreachable (' + ((e && e.message) || e) + ') — falling back to direct :3010');
-    try { socket.close(); } catch (_) {}
+    killSocket(s); // [T148] quiet-close
     openSocket(df + location.hostname + ':3010');
   });
 }
@@ -505,6 +619,36 @@ function mirrorWorldState(d) {
   if (d.m && d.m.ctl) mp.ctlB = d.m.ctl; // T98: {r, side, ph, rt, caps, sites, zf} — wire probe surface (application: main.js mirror block)
   if (d.m && typeof d.m.ggt === 'number') mp.ggTotal = d.m.ggt;
   if (d.m) { mp.matchTl = d.m.tl; mp.uavT = d.m.uav || 0; mp.mBlock = d.m; } // T1-9 timer + T2-10 UAV + scores mirror
+  if (d.m && d.m.br) { // [T171] BR zone mirror — wall + next-ring pose + the bot-rotate state (mirrorWorldState runs for spec AND player paths)
+    const b = d.m.br;
+    updateGasZone(b.cx, b.cz, b.r, b.tx, b.tz, b.tr);
+    World.brZone = { cx: b.cx, cz: b.cz, r: b.r };
+    mp.brB = b;
+  } else if (d.m && !d.m.br && mp.brB) { mp.brB = null; }
+}
+
+// [T171] the room's ground-loot manifest (ev:'brLoot' on the match chain) → client meshes;
+// ids ride so ev:'lootTake' can hide exactly the taken entry. Idempotent per id.
+export function renderLootManifest(loot) {
+  mp.lootById = mp.lootById || {};
+  for (const it of loot || []) {
+    if (mp.lootById[it.id]) continue;
+    const pk = makeLootPickup(it.x, it.z, it.k, it.w);
+    pk.lootId = it.id; mp.lootById[it.id] = pk;
+  }
+}
+export function takeLootById(id) {
+  if (mp.lootById && mp.lootById[id]) { takeLootPickup(mp.lootById[id], true); delete mp.lootById[id]; }
+}
+
+// [T171] loot pickup wire — rate-capped like the other senders (the §34.1 class); the server
+// validates alive + range + not-taken (the authoritative law) and answers with lootTake.
+let lastLootT = 0;
+export function sendLoot(id) {
+  const now = performance.now();
+  if (now - lastLootT < 200) return;
+  lastLootT = now;
+  if (socket && socket.connected) socket.emit('loot', { id });
 }
 
 function onSnap(d) {
@@ -572,8 +716,24 @@ function onSnap(d) {
     apexY: me.y, stimT: player.stimT || 0, sprinting: !!(me.f & F.SPRINT),
   };
   const world = { colliders: World.colliders, jumpPads: World.jumpPads, ladders: World.ladders, water: World.water }; // [T130] the climb/swim registries ride prediction too — the shadow state reads the same truth
-  for (const h of history) if (h.seq > lastSeq) stepState(sh, h.input, world, DT);
-  recon = { x: sh.pos.x, y: sh.pos.y, z: sh.pos.z, vx: sh.vel.x, vy: sh.vel.y, vz: sh.vel.z }; // blend target (§8: recompute each snap, never accumulate)
+  // [T151] THE RESYNC LAW (wire-proven, probe_t151_ws): the hub's FOLD=3 queue DROPS jittered
+  // input bursts (wire truth: ackLag med 21 steps, frozen 42/45 tails across 8 snaps) — and the
+  // §8 replay then re-applies the whole unacked backlog EVERY snap, walking the shadow up to
+  // 240 steps ahead of server truth. The §8 blend then drags the player toward that target —
+  // and the error is MOVEMENT-GATED: standing still replays no-ops (zero drag, the report's
+  // "doesn't double until I walk around"). Beyond 500ms of unacked inputs (30 steps) the link
+  // is degraded: PAUSE the blend (recon=null — pure prediction, the game stays responsive, no
+  // doubling) and bound the stale backlog (keep the last 40) so a recovered ack resumes the
+  // replay from a sane window instead of the full 240-step fantasy.
+  const lastHistSeq = history.length ? history[history.length - 1].seq : 0;
+  const degraded = lastSeq > 0 && lastHistSeq - lastSeq > 30;
+  if (degraded) {
+    recon = null; // pause blending — prediction runs clean until the ack stream recovers
+    if (history.length > 40) history.splice(0, history.length - 40);
+  } else {
+    for (const h of history) if (h.seq > lastSeq) stepState(sh, h.input, world, DT);
+    recon = { x: sh.pos.x, y: sh.pos.y, z: sh.pos.z, vx: sh.vel.x, vy: sh.vel.y, vz: sh.vel.z }; // blend target (§8: recompute each snap, never accumulate)
+  }
 
   // prune history up to ack
   while (history.length && history[0].seq <= lastSeq) history.shift();
@@ -634,17 +794,39 @@ export function frame(dt) {
   }
 
   // §8 correction blend: geometric, ~98% consumed in 100ms; target recomputed per snap
+  // [T151] THE SNAP LAW (the walk-doubling fix, probe_t151_mpwalk-proven): the old
+  // k = min(1, dt*30) reached 1.0 at ANY frame gap >= 33ms — every 30fps machine, every
+  // hiccup, every starved frame — turning the "smoothing" into a hard per-frame snap the
+  // moment a prediction/server error existed. That error is movement-gated: the server's
+  // FOLD=3 queue drops jittered inputs ONLY while walking (standing still drops no
+  // movement), so the drag fired exactly when the user walked — the "doubling" report.
+  // Now: small errors ALWAYS smooth (k capped at 0.25/frame — worst case closes in ~6
+  // frames even at 20fps), big discontinuities (respawn/pad/teleport > 2m) still snap
+  // instantly (k=1) because dragging a teleport reads worse than the teleport.
   if (recon) {
-    const k = Math.min(1, dt * CFG.MP.blendRate);
     const dx = recon.x - player.pos.x, dy = recon.y - player.pos.y, dz = recon.z - player.pos.z;
+    const err = Math.hypot(dx, dy, dz);
+    const k = err > 2 ? 1 : Math.min(0.25, dt * CFG.MP.blendRate);
     player.pos.x += dx * k; player.pos.y += dy * k; player.pos.z += dz * k;
-    player.vel.x = recon.vx; player.vel.y = recon.vy; player.vel.z = recon.vz;
-    if (Math.hypot(dx, dy, dz) < 0.001) recon = null;
+    // [T151] the vel gate: server-truth velocity copies ONLY on meaningful error (>0.5m).
+    // The old unconditional copy transmitted the server's starvation-coast vx≈0 into the
+    // prediction every frame — the walk lerp never reached speed under a degraded link
+    // (the probe's crawl+snap cycling). Healthy recon (err < 0.5m) leaves the prediction's
+    // own velocity untouched — zero interference on a clean link, authority on a dirty one.
+    if (err > 0.5) { player.vel.x = recon.vx; player.vel.y = recon.vy; player.vel.z = recon.vz; }
+    if (err < 0.001) recon = null;
   }
 
   // remote interpolation (spec §9): render at now - interpDelay between bracketing snaps
+  // [T148] THE ADAPTIVE DELAY — the 100ms floor (2× 20Hz snap intervals) is right for a clean
+  // websocket, but burst/jitter arrivals (polling fallback, mobile radios) shrink the EFFECTIVE
+  // buffer and the underrun clamp (freeze-at-latest, then jump) reads as the mid-match movement
+  // stutter. The median ARRIVAL interval stretches the delay to 2.2× of itself (400ms ceiling)
+  // exactly when the stream turns bursty — the §9 law is untouched (render stays BETWEEN
+  // bracketing snaps; only the delay adapts), and a steady websocket keeps the 100ms floor.
+  const delay = Math.min(400, Math.max(CFG.MP.interpDelay, 2.2 * medianSnapMs(now)));
   if (snapBuf.length >= 2) {
-    const rt = now - CFG.MP.interpDelay;
+    const rt = now - delay;
     let a = null, b = null;
     for (let i = 0; i < snapBuf.length - 1; i++) {
       if (snapBuf[i].t <= rt && snapBuf[i + 1].t >= rt) { a = snapBuf[i]; b = snapBuf[i + 1]; break; }
@@ -868,12 +1050,13 @@ export function sendSetKnob(k) {
 // §53.7 P2: pre-join senders — NO join-gate (the shop/social/queue work pre-match)
 export function sendAuth(payload) { if (socket) socket.emit('auth', payload); }
 export function sendEco(payload) { if (socket) socket.emit('eco', payload); }
+export function sendVars(payload) { if (socket) socket.emit('vars', payload); } // §55 [T173]: {op:'get'} → mp.vars + onVars · {op:'set', set:{k:v}} (null deletes; caps 64 keys/8 KB) — pre-join legal (no join gate, the §53.7 law)
 export function sendSoc(payload) { if (socket) socket.emit('soc', payload); }
 export function sendQ(payload) { if (socket) socket.emit('q', payload); }
 
 // §53.7: session mirror — main.js hydrates from ironsight.auth.v1 and updates on responses
-export const AUTH = { name: null, tok: null, pid: null };
-export function setAuth(a) { AUTH.name = (a && a.name) || null; AUTH.tok = (a && a.tok) || null; AUTH.pid = (a && a.pid) || null; }
+export const AUTH = { name: null, tok: null, pid: null, disc: null }; // [T166] disc = the pilot ID discriminator
+export function setAuth(a) { AUTH.name = (a && a.name) || null; AUTH.tok = (a && a.tok) || null; AUTH.pid = (a && a.pid) || null; AUTH.disc = (a && a.disc) || null; }
 export function authPid() { return (AUTH.tok && (AUTH.pid || mp.pid)) || null; } // account pid when signed in, device pid otherwise — zero join-contract change
 
 // T1-1 (SS22.3): server-initiated spawn (SND round start) — the server teleports the actor;

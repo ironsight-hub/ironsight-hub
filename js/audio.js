@@ -167,8 +167,23 @@ export function setDeafened(on) {
 }
 export function hitmark(kill = false, crit = false) {
   if (!ctx) return; const t = ctx.currentTime;
-  tone(t, 0.05, { type: 'square', freq: crit ? 2400 : 1900, peak: 0.16, d: 0.045 });
-  if (kill) tone(t + 0.05, 0.1, { type: 'square', freq: 1300, peak: 0.14, d: 0.09 });
+  // [T161 R15] the pitch-differentiated hit feedback (a11y): the hitSound setting rides a
+  // module multiplier (setHitPitch from main.js applySettings) — 'low' 0.7 / 'high' 1.35 /
+  // default 1.0 (byte-identical).
+  tone(t, 0.05, { type: 'square', freq: (crit ? 2400 : 1900) * hitPitch, peak: 0.16, d: 0.045 });
+  if (kill) tone(t + 0.05, 0.1, { type: 'square', freq: 1300 * hitPitch, peak: 0.14, d: 0.09 });
+}
+// [T161 R15] the a11y audio setters — hitPitch (above) + the mono downmix (a forced-1ch gain
+// insert on the master bus: both speakers get the same signal — single-sided-hearing access).
+let hitPitch = 1.0, IR_MONO = false;
+export function setHitPitch(p) { hitPitch = (p && p > 0) ? p : 1; }
+export function setMono(on) {
+  if (!ctx || !master || on === IR_MONO) return; IR_MONO = !!on;
+  try {
+    master.disconnect();
+    if (on) { const m = ctx.createGain(); m.channelCount = 1; m.channelCountMode = 'explicit'; m.channelInterpretation = 'speakers'; master.connect(m); m.connect(comp); }
+    else master.connect(comp);
+  } catch (e) { /* the chain re-wire never kills audio — worst case the toggle no-ops */ }
 }
 export function hsDing() { if (!ctx) return; const t = ctx.currentTime; tone(t, 0.18, { type: 'sine', freq: 3100, sweepTo: 2900, peak: 0.2, d: 0.16 }); }
 export function reloadSounds(stage, wid = null) { // 0:out 1:in 2:rack · wid rides for the [T117] hotlink

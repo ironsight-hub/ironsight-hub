@@ -40,6 +40,7 @@ const en = {
     // ---- T121 merge block: prone + quickplay preface + team charts ----
     'a.prone': 'PRONE', 'a.proneS': 'crawl — Z to stand', 'a.proneS2': 'STANDING',
     'on.qpPref': 'Quickplay may port you into a LIVE match — rank is unaffected. Fresh lobbies fill with players shortly.',
+    'mp.lobby': 'LOBBY', 'mp.connecting': 'CONNECTING — finding your lobby…', 'mp.pilots': 'LOBBY — {n} PILOTS', 'mp.specs': '{n} SPECTATING', 'mp.deployHint': 'starts the round for everyone in the lobby', // [T157] the lobby face
     'm.teamAlpha': 'ALPHA', 'm.teamBravo': 'BRAVO',
     // ---- T119 merge block: crouch stance mode + camera perspective ----
     's.crouchMode': 'CROUCH INPUT', 's.crouchModeDesc': 'HOLD = crouch while pressed · TOGGLE = one press latches · 2X-TAP = double-tap latches (a single press stays momentary)',
@@ -76,7 +77,7 @@ const en = {
   'ix.lwTrail': 'MOVEMENT TRAIL — UNLOCKS FROM CAREER [U1 PHASE 3 · NON-MONETARY]',
   'ix.lwEmote': 'EMOTE (B) — UNLOCKS FROM CAREER [U1 PHASE 3 · NON-MONETARY]',
   'ix.lwAbility': 'TACTICAL ABILITY', 'ix.lwGear': 'TACTICAL GEAR',
-  'ix.tabGameplay': 'GAMEPLAY', 'ix.tabVideo': 'VIDEO', 'ix.tabAudio': 'AUDIO',
+  'ix.tabGameplay': 'GAMEPLAY', 'ix.tabVideo': 'VIDEO', 'ix.tabAudio': 'AUDIO', 'ix.tabA11y': "ACCESSIBILITY",
   'ix.tabCrosshair': 'CROSSHAIR', 'ix.tabControls': 'CONTROLS', 'ix.tabOnline': 'ONLINE',
   'ix.restoreDefaults': 'RESTORE DEFAULTS',
   'ix.runItBack': 'RUN IT BACK', 'ix.mainMenu': 'MAIN MENU',
@@ -176,6 +177,7 @@ const en = {
   'h.spectating': 'SPECTATING {n}', 'h.specArena': 'ARENA',
   'h.specHint': 'LMB/SPACE NEXT · RMB PREV · MOUSE LOOK',
   'h.noRecord': 'NO RECORD', 'h.world': 'WORLD', 'h.hs': '◉HS',
+  'h.recTip': 'LIVE REPLAY RECORDING — this match is being captured: watch it in History ▸ WATCH REPLAY · toggle in Settings ▸ Replay Recording',
   'h.auto': 'AUTO', 'h.semi': 'SEMI', 'h.dbl': 'DBL',
   'h.sbHead': ['#', 'OPERATOR', 'SCORE', 'ELIMS', 'DEATHS', 'STREAK'],
   'h.ping': 'PING', 'h.standby': 'STANDBY',
@@ -240,6 +242,7 @@ const fr = {
     // ---- Bloc de fusion T121 : position couchée + préavis quickplay + graphiques d'équipe ----
     'a.prone': 'À PLAT VENTRE', 'a.proneS': 'ramper — Z pour se relever', 'a.proneS2': 'DEBOUT',
     'on.qpPref': 'La partie rapide peut vous porter dans un match EN COURS — le rang n\'est pas affecté. Les nouvelles salles se remplissent sous peu.',
+    'mp.lobby': 'LOBBY', 'mp.connecting': 'CONNEXION — recherche de votre lobby…', 'mp.pilots': 'LOBBY — {n} PILOTES', 'mp.specs': '{n} SPECTATEURS', 'mp.deployHint': 'lance la manche pour toute l\'équipe du lobby', // [T157]
     'm.teamAlpha': 'ALPHA', 'm.teamBravo': 'BRAVO',
     // ---- Bloc de fusion T119 : mode de posture + perspective caméra ----
     's.crouchMode': 'ACCROUPIR (ENTRÉE)', 's.crouchModeDesc': 'MAINTENIR = accroupi tant que pressé · BASCULER = un appui verrouille · 2X = double appui verrouille (appui simple passager)',
@@ -273,7 +276,7 @@ const fr = {
   'ix.lwTrail': 'TRAÎNÉE DE MOUVEMENT — DÉBLOQUÉE VIA CARRIÈRE [U1 PHASE 3 · NON-MONÉTAIRE]',
   'ix.lwEmote': 'EMOTE (B) — DÉBLOQUÉE VIA CARRIÈRE [U1 PHASE 3 · NON-MONÉTAIRE]',
   'ix.lwAbility': 'CAPACITÉ TACTIQUE', 'ix.lwGear': 'ÉQUIPEMENT TACTIQUE',
-  'ix.tabGameplay': 'JEU', 'ix.tabVideo': 'VIDÉO', 'ix.tabAudio': 'AUDIO',
+  'ix.tabGameplay': 'JEU', 'ix.tabVideo': 'VIDÉO', 'ix.tabAudio': 'AUDIO', 'ix.tabA11y': "ACCESSIBILITÉ",
   'ix.tabCrosshair': 'RÉTICULE', 'ix.tabControls': 'CONTRÔLES', 'ix.tabOnline': 'EN LIGNE',
   'ix.restoreDefaults': 'RESTAURER LES DÉFAUTS',
   'ix.runItBack': 'REVANCHE', 'ix.mainMenu': 'MENU PRINCIPAL',
@@ -365,6 +368,7 @@ const fr = {
   'h.spectating': 'OBSERVATION : {n}', 'h.specArena': 'ARÈNE',
   'h.specHint': 'CLG/ESPACE SUIVANT · CLD PRÉC · SOURIS REGARDS',
   'h.noRecord': 'AUCUN ENREGISTREMENT', 'h.world': 'MONDE', 'h.hs': '◉HS',
+  'h.recTip': 'ENREGISTREMENT REPLAY EN DIRECT — le match est capturé : à revoir dans Historique ▸ VOIR LE REPLAY · réglage : Paramètres ▸ Enregistrement Replay',
   'h.auto': 'AUTO', 'h.semi': 'SEMI', 'h.dbl': 'DBL',
   'h.sbHead': ['#', 'OPÉRATEUR', 'SCORE', 'ÉLIMS', 'MORTS', 'SÉRIE'],
   'h.ping': 'PING', 'h.standby': 'VEILLE',
@@ -423,6 +427,7 @@ const de = {
     // ---- T121-Mergeblock: liegend + Quickplay-Hinweis + Team-Charts ----
     'a.prone': 'LIEGEND', 'a.proneS': 'kriechen — Z zum Aufstehen', 'a.proneS2': 'STEHEND',
     'on.qpPref': 'Schnellspiel kann dich in ein LAUFADES Match porten — Rang bleibt unberührt. Neue Lobbys füllen sich in Kürze.',
+    'mp.lobby': 'LOBBY', 'mp.connecting': 'VERBINDUNG — Lobby wird gesucht…', 'mp.pilots': 'LOBBY — {n} PILOTEN', 'mp.specs': '{n} ZUSCHAUER', 'mp.deployHint': 'startet die Runde für alle in der Lobby', // [T157]
     'm.teamAlpha': 'ALPHA', 'm.teamBravo': 'BRAVO',
     // ---- T119-Mergeblock: Hockungs-Modus + Kameraperspektive ----
     's.crouchMode': 'DUCKEN (EINGABE)', 's.crouchModeDesc': 'HALTEN = geduckt solange gedrückt · UMSCHALTEN = Tippen verriegelt · 2X = Doppeltipp verriegelt (einzelner Tipp kurzzeitig)',
@@ -456,7 +461,7 @@ const de = {
   'ix.lwTrail': 'BEWEGUNGSSPUR — FREISCHALTBAR ÜBER KARRIERE [U1 PHASE 3 · NICHT-MONETÄR]',
   'ix.lwEmote': 'EMOTE (B) — FREISCHALTBAR ÜBER KARRIERE [U1 PHASE 3 · NICHT-MONETÄR]',
   'ix.lwAbility': 'TAKTISCHE FÄHIGKEIT', 'ix.lwGear': 'TAKTISCHE AUSRÜSTUNG',
-  'ix.tabGameplay': 'GAMEPLAY', 'ix.tabVideo': 'VIDEO', 'ix.tabAudio': 'AUDIO',
+  'ix.tabGameplay': 'GAMEPLAY', 'ix.tabVideo': 'VIDEO', 'ix.tabAudio': 'AUDIO', 'ix.tabA11y': "BARRIEFREIHEIT",
   'ix.tabCrosshair': 'FADENKREUZ', 'ix.tabControls': 'STEUERUNG', 'ix.tabOnline': 'ONLINE',
   'ix.restoreDefaults': 'STANDARDS WIEDERHERSTELLEN',
   'ix.runItBack': 'REVANCHE', 'ix.mainMenu': 'HAUPTMENÜ',
@@ -548,6 +553,7 @@ const de = {
   'h.spectating': 'ZUSCHAUEN: {n}', 'h.specArena': 'ARENA',
   'h.specHint': 'LM/LEERTASTE WEITER · RM ZURÜCK · MAUS BLICK',
   'h.noRecord': 'KEINE AUFNAHME', 'h.world': 'WELT', 'h.hs': '◉HS',
+  'h.recTip': 'LIVE-REPLAY-AUFNAHME — das Match wird aufgezeichnet: abspielbar unter Verlauf ▸ REPLAY ANSEHEN · Umschalter: Einstellungen ▸ Replay-Aufnahme',
   'h.auto': 'AUTO', 'h.semi': 'EINZEL', 'h.dbl': 'DBL',
   'h.sbHead': ['#', 'OPERATOR', 'SCORE', 'ELIMS', 'TODE', 'SERIE'],
   'h.ping': 'PING', 'h.standby': 'BEREITSCHAFT',
@@ -606,6 +612,7 @@ const ru = {
     // ---- Блок слияния T121: лежа + предуведение быстрой игры + командные таблицы ----
     'a.prone': 'ЛЕЖА', 'a.proneS': 'ползти — Z встать', 'a.proneS2': 'СТОЯ',
     'on.qpPref': 'Быстрая игра может перенести вас в ИДУЩИЙ матч — ранг не затрагивается. Новые лобби скоро заполнятся.',
+    'mp.lobby': 'ЛОББИ', 'mp.connecting': 'ПОДКЛЮЧЕНИЕ — ищем лобби…', 'mp.pilots': 'ЛОББИ — {n} ПИЛОТОВ', 'mp.specs': '{n} НАБЛЮДАЮТ', 'mp.deployHint': 'запускает раунд для всех в лобби', // [T157]
     'm.teamAlpha': 'АЛЬФА', 'm.teamBravo': 'БРАВО',
     // ---- Блок слияния T119: режим приседания + перспектива камеры ----
     's.crouchMode': 'ПРИСЕДАНИЕ (ВВОД)', 's.crouchModeDesc': 'УДЕРЖАНИЕ = присед, пока зажато · ПЕРЕКЛЮЧЕНИЕ = одно нажатие фиксирует · 2X = двойное нажатие фиксирует (одиночное — кратко)',
@@ -639,7 +646,7 @@ const ru = {
   'ix.lwTrail': 'СЛЕД ДВИЖЕНИЯ — ОТКРЫВАЕТСЯ В КАРЬЕРЕ [U1 ФАЗА 3 · НЕ-МОНЕТАРНЫЙ]',
   'ix.lwEmote': 'ЭМОЦИЯ (B) — ОТКРЫВАЕТСЯ В КАРЬЕРЕ [U1 ФАЗА 3 · НЕ-МОНЕТАРНЫЙ]',
   'ix.lwAbility': 'ТАКТИЧЕСКАЯ СПОСОБНОСТЬ', 'ix.lwGear': 'ТАКТИЧЕСКОЕ СНАРЯЖЕНИЕ',
-  'ix.tabGameplay': 'ИГРА', 'ix.tabVideo': 'ВИДЕО', 'ix.tabAudio': 'ЗВУК',
+  'ix.tabGameplay': 'ИГРА', 'ix.tabVideo': 'ВИДЕО', 'ix.tabAudio': 'ЗВУК', 'ix.tabA11y': "ДОСТУПНОСТЬ",
   'ix.tabCrosshair': 'ПРИЦЕЛ', 'ix.tabControls': 'УПРАВЛЕНИЕ', 'ix.tabOnline': 'ОНЛАЙН',
   'ix.restoreDefaults': 'СБРОСИТЬ ПО УМОЛЧАНИЮ',
   'ix.runItBack': 'Реванш', 'ix.mainMenu': 'ГЛАВНОЕ МЕНЮ',
@@ -731,6 +738,7 @@ const ru = {
   'h.spectating': 'НАБЛЮДЕНИЕ: {n}', 'h.specArena': 'АРЕНА',
   'h.specHint': 'ЛКМ/ПРОБЕЛ ДАЛЬШЕ · ПКМ НАЗАД · МЫШЬ ОБЗОР',
   'h.noRecord': 'ЗАПИСИ НЕТ', 'h.world': 'МИР', 'h.hs': '◉HS',
+  'h.recTip': 'ЗАПИСЬ ПОВТОРА В ЭФИРЕ — матч сохраняется: посмотреть в История ▸ СМОТРЕТЬ ПОВТОР · переключатель: Настройки ▸ Запись повтора',
   'h.auto': 'АВТО', 'h.semi': 'ОДИНОЧ', 'h.dbl': 'DBL',
   'h.sbHead': ['#', 'ОПЕРАТОР', 'СЧЁТ', 'ЛИКВ.', 'СМЕРТИ', 'СЕРИЯ'],
   'h.ping': 'ПИНГ', 'h.standby': 'ОЖИДАНИЕ',
@@ -789,6 +797,7 @@ const es = {
     // ---- Bloque de fusión T121: cuerpo a tierra + aviso de partida rápida + tablas de equipo ----
     'a.prone': 'CUERPO A TIERRA', 'a.proneS': 'arrastrarse — Z para ponerte de pie', 'a.proneS2': 'DE PIE',
     'on.qpPref': 'La partida rápida puede portarte a un partido EN CURSO — el rango no se ve afectado. Los nuevos lobbys se llenan pronto.',
+    'mp.lobby': 'LOBBY', 'mp.connecting': 'CONECTANDO — buscando tu lobby…', 'mp.pilots': 'LOBBY — {n} PILOTOS', 'mp.specs': '{n} ESPECTADORES', 'mp.deployHint': 'inicia la ronda para todos en el lobby', // [T157]
     'm.teamAlpha': 'ALFA', 'm.teamBravo': 'BRAVO',
     // ---- Bloque de fusión T119: modo de agachado + perspectiva de cámara ----
     's.crouchMode': 'AGACHARSE (ENTRADA)', 's.crouchModeDesc': 'MANTENER = agachado mientras se pulsa · ALTERNAR = un toque fija · 2X = doble toque fija (toque simple temporal)',
@@ -822,7 +831,7 @@ const es = {
   'ix.lwTrail': 'ESTELA DE MOVIMIENTO — SE DESBLOQUEA EN CARRERA [U1 FASE 3 · NO MONETARIO]',
   'ix.lwEmote': 'EMOTE (B) — SE DESBLOQUEA EN CARRERA [U1 FASE 3 · NO MONETARIO]',
   'ix.lwAbility': 'HABILIDAD TÁCTICA', 'ix.lwGear': 'EQUIPO TÁCTICO',
-  'ix.tabGameplay': 'JUEGO', 'ix.tabVideo': 'VÍDEO', 'ix.tabAudio': 'AUDIO',
+  'ix.tabGameplay': 'JUEGO', 'ix.tabVideo': 'VÍDEO', 'ix.tabAudio': 'AUDIO', 'ix.tabA11y': "ACCESIBILIDAD",
   'ix.tabCrosshair': 'MIRA', 'ix.tabControls': 'CONTROLES', 'ix.tabOnline': 'EN LÍNEA',
   'ix.restoreDefaults': 'RESTAURAR PREDETERMINADOS',
   'ix.runItBack': 'REVANCHA', 'ix.mainMenu': 'MENÚ PRINCIPAL',
@@ -914,6 +923,7 @@ const es = {
   'h.spectating': 'OBSERVANDO: {n}', 'h.specArena': 'ARENA',
   'h.specHint': 'CLI/ESPACIO SIGUIENTE · CRD ANTERIOR · RATÓN MIRAR',
   'h.noRecord': 'SIN GRABACIÓN', 'h.world': 'MUNDO', 'h.hs': '◉HS',
+  'h.recTip': 'GRABACIÓN DE REPETICIÓN EN VIVO — la partida se guarda: verla en Historial ▸ VER REPETICIÓN · ajuste: Ajustes ▸ Grabación de repetición',
   'h.auto': 'AUTO', 'h.semi': 'SEMI', 'h.dbl': 'DBL',
   'h.sbHead': ['#', 'OPERADOR', 'PUNTOS', 'BAJAS', 'MUERTES', 'RACHA'],
   'h.ping': 'PING', 'h.standby': 'EN ESPERA',
@@ -972,6 +982,7 @@ const pt = {
     // ---- Bloco de fusão T121: deitado + aviso de quickplay + tabelas de equipe ----
     'a.prone': 'DEITADO', 'a.proneS': 'engatinhar — Z para levantar', 'a.proneS2': 'DE PÉ',
     'on.qpPref': 'O jogo rápido pode portar você para uma partida EM CURSO — o rank não é afetado. Novos lobbys enchem em breve.',
+    'mp.lobby': 'LOBBY', 'mp.connecting': 'CONECTANDO — buscando seu lobby…', 'mp.pilots': 'LOBBY — {n} PILOTOS', 'mp.specs': '{n} ESPECTADORES', 'mp.deployHint': 'inicia a rodada para todos no lobby', // [T157]
     'm.teamAlpha': 'ALFA', 'm.teamBravo': 'BRAVO',
     // ---- Bloco de fusão T119: modo de agachar + perspectiva de câmera ----
     's.crouchMode': 'AGACHAR (ENTRADA)', 's.crouchModeDesc': 'SEGURAR = agachado enquanto pressionado · ALTERNAR = um toque fixa · 2X = toque duplo fixa (toque simples temporário)',
@@ -1005,7 +1016,7 @@ const pt = {
   'ix.lwTrail': 'RASTRO DE MOVIMENTO — DESBLOQUEIA NA CARREIRA [U1 FASE 3 · NÃO-MONETÁRIO]',
   'ix.lwEmote': 'EMOTE (B) — DESBLOQUEIA NA CARREIRA [U1 FASE 3 · NÃO-MONETÁRIO]',
   'ix.lwAbility': 'HABILIDADE TÁTICA', 'ix.lwGear': 'EQUIPAMENTO TÁTICO',
-  'ix.tabGameplay': 'JOGO', 'ix.tabVideo': 'VÍDEO', 'ix.tabAudio': 'ÁUDIO',
+  'ix.tabGameplay': 'JOGO', 'ix.tabVideo': 'VÍDEO', 'ix.tabAudio': 'ÁUDIO', 'ix.tabA11y': "ACESSIBILIDADE",
   'ix.tabCrosshair': 'MIRA', 'ix.tabControls': 'CONTROLES', 'ix.tabOnline': 'ONLINE',
   'ix.restoreDefaults': 'RESTAURAR PADRÕES',
   'ix.runItBack': 'REVANCHE', 'ix.mainMenu': 'MENU PRINCIPAL',
@@ -1097,6 +1108,7 @@ const pt = {
   'h.spectating': 'OBSERVANDO: {n}', 'h.specArena': 'ARENA',
   'h.specHint': 'EME/ESPAÇO PRÓXIMO · EMD ANTERIOR · MOUSE OLHAR',
   'h.noRecord': 'SEM GRAVAÇÃO', 'h.world': 'MUNDO', 'h.hs': '◉HS',
+  'h.recTip': 'GRAVAÇÃO DE REPLAY EM VIVO — a partida é capturada: assista em Histórico ▸ ASSISTIR REPLAY · ajuste: Configurações ▸ Gravação de Replay',
   'h.auto': 'AUTO', 'h.semi': 'SEMI', 'h.dbl': 'DBL',
   'h.sbHead': ['#', 'OPERADOR', 'PONTOS', 'ABATES', 'MORTES', 'SEQUÊNCIA'],
   'h.ping': 'PING', 'h.standby': 'EM ESPERA',
@@ -1155,6 +1167,7 @@ const nl = {
     // ---- T121-fusieblok: liggend + quickplay-voorwaarschuwing + teamgrafieken ----
     'a.prone': 'LIGGEN', 'a.proneS': 'kruipen — Z om op te staan', 'a.proneS2': 'STAAND',
     'on.qpPref': 'Snelspel kan je in een LOPEnde match plaatsen — rank wordt niet beïnvloed. Nieuwe lobbys vullen snel.',
+    'mp.lobby': 'LOBBY', 'mp.connecting': 'VERBINDEN — lobby zoeken…', 'mp.pilots': 'LOBBY — {n} PILOTEN', 'mp.specs': '{n} TOESCHOUWERS', 'mp.deployHint': 'start de ronde voor iedereen in de lobby', // [T157]
     'm.teamAlpha': 'ALFA', 'm.teamBravo': 'BRAVO',
     // ---- T119-fusieblok: dukinvoer + cameraperspectief ----
     's.crouchMode': 'DUKEN (INVOER)', 's.crouchModeDesc': 'INGEDRUKT = gedukt zolang ingedrukt · WISSELEN = één tik vergrendelt · 2X = dubbeltik vergrendelt (enkele tik tijdelijk)',
@@ -1188,7 +1201,7 @@ const nl = {
   'ix.lwTrail': 'BEWEGINGSSPOOR — ONTGRENDELD VIA CARRIÈRE [U1 FASE 3 · NIET-MONETAIR]',
   'ix.lwEmote': 'EMOTE (B) — ONTGRENDELD VIA CARRIÈRE [U1 FASE 3 · NIET-MONETAIR]',
   'ix.lwAbility': 'TACTISCHE VAARDIGHEID', 'ix.lwGear': 'TACTISCHE UITRUSTING',
-  'ix.tabGameplay': 'GAMEPLAY', 'ix.tabVideo': 'VIDEO', 'ix.tabAudio': 'AUDIO',
+  'ix.tabGameplay': 'GAMEPLAY', 'ix.tabVideo': 'VIDEO', 'ix.tabAudio': 'AUDIO', 'ix.tabA11y': "접근성",
   'ix.tabCrosshair': 'RICHTKRUIS', 'ix.tabControls': 'BESTURING', 'ix.tabOnline': 'ONLINE',
   'ix.restoreDefaults': 'STANDAARDEN HERSTELLEN',
   'ix.runItBack': 'REVANCHE', 'ix.mainMenu': 'HOOFDMENU',
@@ -1280,6 +1293,7 @@ const nl = {
   'h.spectating': 'TOEKIJKEN: {n}', 'h.specArena': 'ARENA',
   'h.specHint': 'LM/SPATIE VOLGENDE · RM VORIGE · MUIS KIJKEN',
   'h.noRecord': 'GEEN OPNAME', 'h.world': 'WERELD', 'h.hs': '◉HS',
+  'h.recTip': 'LIVE REPLAY-OPNAME — de match wordt opgenomen: bekijk hem in Geschiedenis ▸ REPLAY BEKIJKEN · schakelaar: Instellingen ▸ Replay-opname',
   'h.auto': 'AUTO', 'h.semi': 'SEMI', 'h.dbl': 'DBL',
   'h.sbHead': ['#', 'OPERATOR', 'SCORE', 'ELIMS', 'DOOD', 'SERIE'],
   'h.ping': 'PING', 'h.standby': 'STANDBY',
@@ -1338,6 +1352,7 @@ const ko = {
     // ---- T121 병합 블록: 엎드림 + 빠른 대전 안내 + 팀 차트 ----
     'a.prone': '엎드림', 'a.proneS': '기어가기 — Z로 일어나기', 'a.proneS2': '일어섬',
     'on.qpPref': '빠른 대전은 진행 중인 매치로 이동시킬 수 있습니다 — 등급에는 영향이 없습니다. 새 로비는 곧 채워집니다.',
+    'mp.lobby': '로비', 'mp.connecting': '연결 중 — 로비를 찾는 중…', 'mp.pilots': '로비 — {n}명 대기', 'mp.specs': '{n}명 관전', 'mp.deployHint': '로비의 모든 플레이어와 함께 라운드를 시작합니다', // [T157]
     'm.teamAlpha': '알파', 'm.teamBravo': '브라보',
     // ---- T119 병합 블록: 웅크리기 입력 + 카메라 시점 ----
     's.crouchMode': '웅크리기 (입력)', 's.crouchModeDesc': '홀드 = 누르는 동안 웅크림 · 토글 = 한 번 눌러 고정 · 2회 = 두 번 눌러 고정 (한 번 누름은 일시적)',
@@ -1372,7 +1387,7 @@ const ko = {
   'ix.lwTrail': '이동 잔상 — 커리어에서 해금 [U1 3단계 · 비과금]',
   'ix.lwEmote': '이모트 (B) — 커리어에서 해금 [U1 3단계 · 비과금]',
   'ix.lwAbility': '전술 능력', 'ix.lwGear': '전술 장비',
-  'ix.tabGameplay': '게임플레이', 'ix.tabVideo': '비디오', 'ix.tabAudio': '오디오',
+  'ix.tabGameplay': '게임플레이', 'ix.tabVideo': '비디오', 'ix.tabAudio': '오디오', 'ix.tabA11y': "辅助功能",
   'ix.tabCrosshair': '십자선', 'ix.tabControls': '조작', 'ix.tabOnline': '온라인',
   'ix.restoreDefaults': '기본값 복원',
   'ix.runItBack': '재대결', 'ix.mainMenu': '메인 메뉴',
@@ -1464,6 +1479,7 @@ const ko = {
   'h.spectating': '관전: {n}', 'h.specArena': '아레나',
   'h.specHint': '좌클릭/스페이스 다음 · 우클릭 이전 · 마우스 시선',
   'h.noRecord': '기록 없음', 'h.world': '월드', 'h.hs': '◉HS',
+  'h.recTip': '라이브 리플레이 기록 중 — 경기가 저장됩니다: 기록 ▸ 리플레이 보기에서 감상 · 설정 ▸ 리플레이 기록에서 전환',
   'h.auto': '연사', 'h.semi': '단발', 'h.dbl': 'DBL',
   'h.sbHead': ['#', '오퍼레이터', '점수', '제거', '사망', '연속'],
   'h.ping': '핑', 'h.standby': '대기',
@@ -1522,6 +1538,7 @@ const zh = {
     // ---- T121 合并块：卧倒 + 快速匹配提示 + 队伍表格 ----
     'a.prone': '卧倒', 'a.proneS': '匍匐 — 按 Z 起身', 'a.proneS2': '已起身',
     'on.qpPref': '快速匹配可能会将你传送进进行中的对局 — 不影响段位。新房间很快会满员。',
+    'mp.lobby': '大厅', 'mp.connecting': '连接中 — 正在寻找你的大厅…', 'mp.pilots': '大厅 — {n} 名飞行员', 'mp.specs': '{n} 人观战', 'mp.deployHint': '为大厅中的所有人开始对局', // [T157]
     'm.teamAlpha': '阿尔法', 'm.teamBravo': '布拉沃',
     // ---- T119 合并块：蹲伏输入 + 相机视角 ----
     's.crouchMode': '蹲伏 (输入方式)', 's.crouchModeDesc': '按住 = 按住期间蹲伏 · 切换 = 单击锁定 · 双击 = 双击锁定（单击为临时）',
@@ -1555,7 +1572,7 @@ const zh = {
   'ix.lwTrail': '移动尾迹 — 生涯解锁 [U1 第三阶段 · 非货币]',
   'ix.lwEmote': '表情 (B) — 生涯解锁 [U1 第三阶段 · 非货币]',
   'ix.lwAbility': '战术技能', 'ix.lwGear': '战术装备',
-  'ix.tabGameplay': '玩法', 'ix.tabVideo': '画面', 'ix.tabAudio': '音频',
+  'ix.tabGameplay': '玩法', 'ix.tabVideo': '画面', 'ix.tabAudio': '音频', 'ix.tabA11y': "TOEGANKELIJKHEID",
   'ix.tabCrosshair': '准星', 'ix.tabControls': '操作', 'ix.tabOnline': '在线',
   'ix.restoreDefaults': '恢复默认',
   'ix.runItBack': '再战一局', 'ix.mainMenu': '主菜单',
@@ -1647,6 +1664,7 @@ const zh = {
   'h.spectating': '观战中：{n}', 'h.specArena': '竞技场',
   'h.specHint': '左键/空格 下一个 · 右键 上一个 · 鼠标视角',
   'h.noRecord': '无记录', 'h.world': '世界', 'h.hs': '◉爆头',
+  'h.recTip': '正在录制回放 — 对局将存入历史记录 ▸ 观看回放 · 开关：设置 ▸ 回放录制',
   'h.auto': '自动', 'h.semi': '半自动', 'h.dbl': '双管',
   'h.sbHead': ['#', '干员', '得分', '消灭', '死亡', '连杀'],
   'h.ping': '延迟', 'h.standby': '待机',
@@ -1900,12 +1918,15 @@ const V155 = {
     'ix.mdInfD': 'Survive 3:00. One Patient Zero converts the fallen — the horde grows.',
     'ix.mdCtl': 'CONTROL',
     'ix.mdCtlD': 'Attackers capture zones A+B with 12 lives each; defenders hold. +60s per capture.',
+    'ix.mdBr': 'BATTLE ROYALE',
+    'ix.mdBrD': '30 drop onto the 1.0 km\u00b2 battle map. Loot the ground, outlive the gas, last alive wins. No respawns.',
     'ix.mdCt': 'CUTTHROAT',
     'ix.mdCtD': '3v3v3. Three squads, every squad for itself. First to 40 eliminations; top squad wins.',
     'ix.tabMobile': 'MOBILE',
     'a.gfS': '2v2 — random kit each round',
     'a.infS': 'survive the horde — 3:00',
     'a.ctlS': 'capture A + B — 12 lives',
+    'a.brS': 'loot up \u2014 outlive the gas \u2014 last alive wins',
     'a.ctS': 'three squads — first to 40',
     'a.modeEv': 'MODE EVENT',
     'ev.eventLive': 'LIVE EVENT',
@@ -2041,12 +2062,15 @@ const V155 = {
     'ix.mdInfD': 'Survivez 3:00. Un Patient Zéro convertit les tombés — la horde grossit.',
     'ix.mdCtl': 'CONTROLE',
     'ix.mdCtlD': 'Les attaquants capturent A+B avec 12 vies chacun ; les défenseurs tiennent. +60s par capture.',
+    'ix.mdBr': 'BATTLE ROYALE',
+    'ix.mdBrD': '30 combattants largu\u00e9s sur la carte d\u20191 km\u00b2. Pillez, survivez au gaz, le dernier vivant gagne. Aucune r\u00e9apparition.',
     'ix.mdCt': 'CUTTHROAT',
     'ix.mdCtD': '3v3v3. Trois escouades, chacune pour soi. Première à 40 éliminations ; la meilleure escouade gagne.',
     'ix.tabMobile': 'MOBILE',
     'a.gfS': '2v2 — kit aléatoire à chaque manche',
     'a.infS': 'survivez à la horde — 3:00',
     'a.ctlS': 'capturez A + B — 12 vies',
+    'a.brS': 'pillez \u2014 survivez au gaz \u2014 le dernier vivant gagne',
     'a.ctS': 'trois escouades — première à 40',
     'a.modeEv': 'ÉVÉNEMENT DE MODE',
     'ev.eventLive': 'ÉVÉNEMENT ACTIF',
@@ -2182,12 +2206,15 @@ const V155 = {
     'ix.mdInfD': 'Überlebe 3:00. Ein Patient Null verwandelt die Gefallenen — die Horde wächst.',
     'ix.mdCtl': 'KONTROLLE',
     'ix.mdCtlD': 'Angreifer nehmen A+B mit je 12 Lebenen; Verteidiger halten. +60s pro Einnahme.',
+    'ix.mdBr': 'BATTLE ROYALE',
+    'ix.mdBrD': '30 Springer auf der 1-km\u00b2-Karte. Lootet den Boden, \u00fcberlebt das Gas, der Letzte gewinnt. Keine Respawns.',
     'ix.mdCt': 'CUTTHROAT',
     'ix.mdCtD': '3v3v3. Drei Trupps, jeder für sich. Erste mit 40 Eliminierungen; der beste Trupp gewinnt.',
     'ix.tabMobile': 'MOBIL',
     'a.gfS': '2v2 — Zufalls-Kit pro Runde',
     'a.infS': 'überlebe die Horde — 3:00',
     'a.ctlS': 'nehmt A + B — 12 Leben',
+    'a.brS': 'looten \u2014 \u00fcberlebt das Gas \u2014 der Letzte lebende gewinnt',
     'a.ctS': 'drei Trupps — erste mit 40',
     'a.modeEv': 'MODUS-EREIGNIS',
     'ev.eventLive': 'AKTIVES EVENT',
@@ -2323,12 +2350,15 @@ const V155 = {
     'ix.mdInfD': 'Продержитесь 3:00. Нулевой пациент обращает павших — орда растёт.',
     'ix.mdCtl': 'КОНТРОЛЬ',
     'ix.mdCtlD': 'Атакующие берут A+B с 12 жизнями у каждого; защита держит. +60 с за захват.',
+    'ix.mdBr': 'BATTLE ROYALE',
+    'ix.mdBrD': '\u0411\u043e\u0439\u0446\u044b \u0434\u0435\u0441\u0430\u043d\u0442\u0438\u0440\u0443\u044e\u0442\u0441\u044f \u043d\u0430 \u043a\u0430\u0440\u0442\u0443 1 \u043a\u043c\u00b2. \u0421\u043e\u0431\u0438\u0440\u0430\u0439\u0442\u0435 \u0434\u043e\u0431\u044b\u0447\u0443, \u043f\u0435\u0440\u0435\u0436\u0438\u0432\u0430\u0439\u0442\u0435 \u0433\u0430\u0437, \u043f\u043e\u0431\u0435\u0436\u0434\u0430\u0435\u0442 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0432\u044b\u0436\u0438\u0432\u0448\u0438\u0439. \u0411\u0435\u0437 \u0432\u043e\u0437\u0440\u043e\u0436\u0434\u0435\u043d\u0438\u0439.',
     'ix.mdCt': 'CUTTHROAT',
     'ix.mdCtD': '3×3×3. Три отряда, каждый сам за себя. Первые до 40 устранений; лучший отряд побеждает.',
     'ix.tabMobile': 'МОБИЛЬНОЕ',
     'a.gfS': '2×2 — случайный набор на раунд',
     'a.infS': 'переживите орду — 3:00',
     'a.ctlS': 'захватите A + B — 12 жизней',
+    'a.brS': '\u0441\u043e\u0431\u0438\u0440\u0430\u0439\u0442\u0435 \u0434\u043e\u0431\u044b\u0447\u0443 \u2014 \u043f\u0435\u0440\u0435\u0436\u0438\u0432\u0430\u0439\u0442\u0435 \u0433\u0430\u0437 \u2014 \u043f\u043e\u0431\u0435\u0436\u0434\u0430\u0435\u0442 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439',
     'a.ctS': 'три отряда — первые до 40',
     'a.modeEv': 'СОБЫТИЕ РЕЖИМА',
     'ev.eventLive': 'АКТИВНОЕ СОБЫТИЕ',
@@ -2464,12 +2494,15 @@ const V155 = {
     'ix.mdInfD': 'Sobrevive 3:00. Un Paciente Cero convierte a los caídos: la horda crece.',
     'ix.mdCtl': 'CONTROL',
     'ix.mdCtlD': 'Los atacantes capturan A+B con 12 vidas cada uno; los defensores aguantan. +60s por captura.',
+    'ix.mdBr': 'BATTLE ROYALE',
+    'ix.mdBrD': '30 caen en el mapa de 1 km\u00b2. Saquea el suelo, sobrevive al gas, el \u00faltimo vivo gana. Sin reapariciones.',
     'ix.mdCt': 'CUTTHROAT',
     'ix.mdCtD': '3v3v3. Tres escuadras, cada una por su cuenta. Primera a 40 eliminaciones; gana la mejor escuadra.',
     'ix.tabMobile': 'MÓVIL',
     'a.gfS': '2v2 — kit aleatorio por ronda',
     'a.infS': 'sobrevive a la horda — 3:00',
     'a.ctlS': 'captura A + B — 12 vidas',
+    'a.brS': 'saquea \u2014 sobrevive al gas \u2014 el \u00faltimo vivo gana',
     'a.ctS': 'tres escuadras — primera a 40',
     'a.modeEv': 'EVENTO DE MODO',
     'ev.eventLive': 'EVENTO ACTIVO',
@@ -2605,12 +2638,15 @@ const V155 = {
     'ix.mdInfD': 'Sobreviva 3:00. Um Paciente Zero converte os caídos — a horda cresce.',
     'ix.mdCtl': 'CONTROLO',
     'ix.mdCtlD': 'Os atacantes capturam A+B com 12 vidas cada; os defensores aguentam. +60s por captura.',
+    'ix.mdBr': 'BATTLE ROYALE',
+    'ix.mdBrD': '30 caem no mapa de 1 km\u00b2. Saqueie o ch\u00e3o, sobreviva ao g\u00e1s, o \u00faltimo vivo ganha. Sem respawns.',
     'ix.mdCt': 'CUTTHROAT',
     'ix.mdCtD': '3v3v3. Três esquadrões, cada um por si. Primeiro a 40 eliminações; o melhor esquadrão vence.',
     'ix.tabMobile': 'MÓVEL',
     'a.gfS': '2v2 — kit aleatório por ronda',
     'a.infS': 'sobreviva à horda — 3:00',
     'a.ctlS': 'capture A + B — 12 vidas',
+    'a.brS': 'saqueie \u2014 sobreviva ao g\u00e1s \u2014 o \u00faltimo vivo ganha',
     'a.ctS': 'três esquadrões — primeiro a 40',
     'a.modeEv': 'EVENTO DE MODO',
     'ev.eventLive': 'EVENTO ATIVO',
@@ -2746,12 +2782,15 @@ const V155 = {
     'ix.mdInfD': '3분 생존. 첫 감염자가 쓰러진 자를 바꿉니다 — 무리가 자랍니다.',
     'ix.mdCtl': '컨트롤',
     'ix.mdCtlD': '공격팀은 구역 A+B를 12목숨으로 점령; 수비팀은 막습니다. 점령당 +60초.',
+    'ix.mdBr': 'BATTLE ROYALE',
+    'ix.mdBrD': '30\uba85\uc774 1km\u00b2 \ub9f5\uc5d0 \uc7a5\uc0ac\ud569\ub2c8\ub2e4. \ub8e8\ud2b8\ub97c \uc5bb\uace0, \uac00\uc2a4\ub97c \uacac\ub514\uace0, \ub9c8\uc9c0\ub9c9 \uc0dd\uc874\uc790\uac00 \uc774\uae41\ub2c8\ub2e4. \ubd80\ud658 \uc5c6\uc74c.',
     'ix.mdCt': 'CUTTHROAT',
     'ix.mdCtD': '3v3v3. Drie squads, iedereen voor zich. Eerst naar 40 eliminaties; de beste squad wint.',
     'ix.tabMobile': '모바일',
     'a.gfS': '2대2 — 라운드마다 랜덤 키트',
     'a.infS': '무리를 이겨라 — 3분',
     'a.ctlS': 'A + B 점령 — 목숨 12',
+    'a.brS': '\ub8e8\ud2b8 \uc5bb\uace0 \u2014 \uac00\uc2a4\ub97c \uacac\ub514\uace0 \u2014 \ub9c8\uc9c0\ub9c9 \uc0dd\uc874\uc790\uac00 \uc2b9\ub9ac',
     'a.ctS': 'drie squads — eerst naar 40',
     'a.modeEv': '모드 이벤트',
     'ev.eventLive': '진행 중 이벤트',
@@ -2887,12 +2926,15 @@ const V155 = {
     'ix.mdInfD': '存活3分钟。零号感染者转化阵亡者——尸群不断壮大。',
     'ix.mdCtl': '占领控制',
     'ix.mdCtlD': '进攻方以每人12条命占领A+B区；防守方坚守。每次占领+60秒。',
+    'ix.mdBr': 'BATTLE ROYALE',
+    'ix.mdBrD': '30\u4eba\u7a7a\u964d\u52301\u5e73\u65b9\u516c\u91cc\u6218\u5730\u56fe\u3002\u641c\u5272\u5730\u9762\u7269\u8d44\uff0c\u9003\u79bb\u6bd2\u5708\uff0c\u6d3b\u5230\u6700\u540e\u5373\u83b7\u80dc\u3002\u65e0\u91cd\u751f\u3002',
     'ix.mdCt': 'CUTTHROAT',
     'ix.mdCtD': '3v3v3. 세 개 분대, 각자 살아남습니다. 40 처격 선점, 최고 분대가 승리합니다.',
     'ix.tabMobile': '移动端',
     'a.gfS': '2对2——每回合随机配装',
     'a.infS': '在尸群中存活——3分钟',
     'a.ctlS': '占领A+B——12条命',
+    'a.brS': '\u641c\u5272\u7269\u8d44\u2014\u9003\u79bb\u6bd2\u5708\u2014\u6d3b\u5230\u6700\u540e\u5373\u80dc',
     'a.ctS': '세 분대 — 40 선점',
     'a.modeEv': '模式事件',
     'ev.eventLive': '进行中活动',
@@ -3028,12 +3070,15 @@ const V155 = {
     'ix.mdInfD': 'Overleef 3:00. Eén patiënt nul convertiet de gevallenen — de horde groeit.',
     'ix.mdCtl': 'CONTROLE',
     'ix.mdCtlD': 'Aanvallers nemen A+B met elk 12 levens; verdedigers houden vast. +60s per verovering.',
+    'ix.mdBr': 'BATTLE ROYALE',
+    'ix.mdBrD': '30 dalen op de 1 km\u00b2 kaart. Plunder de grond, overleef het gas, de laatste overlevende wint. Geen respawns.',
     'ix.mdCt': 'CUTTHROAT',
     'ix.mdCtD': '3v3v3。三个小队各自为战。率先达到40次击杀；最强小队获胜。',
     'ix.tabMobile': 'MOBIEL',
     'a.gfS': '2v2 — willekeurige kit per ronde',
     'a.infS': 'overleef de horde — 3:00',
     'a.ctlS': 'verover A + B — 12 levens',
+    'a.brS': 'plunder \u2014 overleef het gas \u2014 de laatste overlevende wint',
     'a.ctS': '三个小队——率先达到40',
     'a.modeEv': 'MODE-EVENT',
     'ev.eventLive': 'ACTIEF EVENT',
@@ -3347,6 +3392,7 @@ const V156 = {
   en: {
       'ix.navPlay': 'PLAY',
       'ix.navShop': 'SHOP',
+    'ix.pgCareer': 'CAREER', 'ix.pgPrivate': 'PRIVATE MATCH',
       'ix.pgMain': 'MAIN MENU',
       'ix.pgModes': 'SELECT OPERATION',
       'ix.pgLoadout': 'LOADOUT',
@@ -3490,6 +3536,7 @@ const V156 = {
   fr: {
       'ix.navPlay': 'JOUER',
       'ix.navShop': 'BOUTIQUE',
+    'ix.pgCareer': 'CARRIÈRE', 'ix.pgPrivate': 'MATCH PRIVÉ',
       'ix.pgMain': 'MENU PRINCIPAL',
       'ix.pgModes': 'CHOISIR OPÉRATION',
       'ix.pgLoadout': 'ÉQUIPEMENT',
@@ -3633,6 +3680,7 @@ const V156 = {
   de: {
       'ix.navPlay': 'SPIELEN',
       'ix.navShop': 'SHOP',
+    'ix.pgCareer': 'KARRIERE', 'ix.pgPrivate': 'PRIVATES MATCH',
       'ix.pgMain': 'HAUPTMENÜ',
       'ix.pgModes': 'EINSATZ WÄHLEN',
       'ix.pgLoadout': 'LOADOUT',
@@ -3778,6 +3826,7 @@ const V156 = {
   ru: {
       'ix.navPlay': 'ИГРАТЬ',
       'ix.navShop': 'МАГАЗИН',
+    'ix.pgCareer': 'КАРЬЕРА', 'ix.pgPrivate': 'ЧАСТНЫЙ МАТЧ',
       'ix.pgMain': 'ГЛАВНОЕ МЕНЮ',
       'ix.pgModes': 'ВЫБОР ОПЕРАЦИИ',
       'ix.pgLoadout': 'СНАРЯЖЕНИЕ',
@@ -3923,6 +3972,7 @@ const V156 = {
   es: {
       'ix.navPlay': 'JUGAR',
       'ix.navShop': 'TIENDA',
+    'ix.pgCareer': 'CARRERA', 'ix.pgPrivate': 'PARTIDA PRIVADA',
       'ix.pgMain': 'MENÚ PRINCIPAL',
       'ix.pgModes': 'ELEGIR OPERACIÓN',
       'ix.pgLoadout': 'EQUIPO',
@@ -4068,6 +4118,7 @@ const V156 = {
   pt: {
       'ix.navPlay': 'JOGAR',
       'ix.navShop': 'LOJA',
+    'ix.pgCareer': 'CARREIRA', 'ix.pgPrivate': 'PARTIDA PRIVADA',
       'ix.pgMain': 'MENU PRINCIPAL',
       'ix.pgModes': 'ESCOLHER OPERAÇÃO',
       'ix.pgLoadout': 'EQUIPAMENTO',
@@ -4213,6 +4264,7 @@ const V156 = {
   nl: {
       'ix.navPlay': 'SPELEN',
       'ix.navShop': 'WINKEL',
+    'ix.pgCareer': 'LOOPBAAN', 'ix.pgPrivate': 'PRIVÉ-MATCH',
       'ix.pgMain': 'HOOFDMENU',
       'ix.pgModes': 'OPERATIE KIEZEN',
       'ix.pgLoadout': 'UITRUSTING',
@@ -4358,6 +4410,7 @@ const V156 = {
   ko: {
       'ix.navPlay': '플레이',
       'ix.navShop': '상점',
+    'ix.pgCareer': '커리어', 'ix.pgPrivate': '사설 경기',
       'ix.pgMain': '메인 메뉴',
       'ix.pgModes': '작전 선택',
       'ix.pgLoadout': '장비',
@@ -4503,6 +4556,7 @@ const V156 = {
   zh: {
       'ix.navPlay': '对战',
       'ix.navShop': '商店',
+    'ix.pgCareer': '生涯', 'ix.pgPrivate': '私人对局',
       'ix.pgMain': '主菜单',
       'ix.pgModes': '选择作战',
       'ix.pgLoadout': '配装',
@@ -5177,6 +5231,16 @@ const V161 = {
     'op.bio.specter': "No dossier. No footage. No witnesses who admit to either.",
     'op.bio.volt': "Disruption warfare. Where VOLT walks, servos stutter and radars blur.",
     'op.bio.herald': "Command-grade presence. Squads under HERALD do not break — they rally.",
+    'eco.gift': "GIFT",
+    'eco.giftPh': "CR AMOUNT",
+    'eco.giftSent': "Gift sent — the receipt lands in your friend's inbox",
+    'eco.recycle': "RECYCLE — sell back at the 40 CR dupe rate",
+    'shop.featured': "TODAY'S FEATURED: {n}",
+    'm.streakTitle': "SCORESTREAKS — tap a slot to cycle",
+    'm.streakSlot': "SLOT {n}",
+    'op.bio.dusk': "Night-recon specialist. Moves between the lampposts, never under them.",
+    'op.bio.forge': "Quartermaster blood. If it can be built, fixed, or resupplied — FORGE already did.",
+    'op.bio.onyx': "Walks into a firefight and the fight slows down. That is not fear — that is SURGE.",
   },
   fr: {
     'ix.pgOps': "OPÉRATEURS", 'ix.pgOpsHint': "effectif · kits · identité", 'ix.emWave': "SALUER", 'ix.emNod': "HOCHER", 'ix.emHint': "glissez pour pivoter",
@@ -5192,6 +5256,16 @@ const V161 = {
     'op.bio.specter': "Aucun dossier. Aucune image. Aucun témoin qui l'admette.",
     'op.bio.volt': "Guerre de disruption. Là où VOLT passe, les servos hoquettent et les radars floutent.",
     'op.bio.herald': "Présence de commandement. Les escouades sous HERALD ne rompent pas — elles rallient.",
+    'eco.gift': "CADEAU",
+    'eco.giftPh': "MONTANT CR",
+    'eco.giftSent': "Cadeau envoyé — le reçu arrive dans la boîte de votre ami",
+    'eco.recycle': "RECYCLER — revendre au taux de 40 CR des doublons",
+    'shop.featured': "EN VEDETTE AUJOURD'HUI : {n}",
+    'm.streakTitle': "SCORESTREAKS — touchez un emplacement pour défiler",
+    'm.streakSlot': "EMPLACEMENT {n}",
+    'op.bio.dusk': "Spécialiste de la recon nocturne. Se déplace entre les réverbères, jamais dessous.",
+    'op.bio.forge': "Sang d'intendant. Si ça peut se construire, réparer ou réapprovisionner — FORGE l'a déjà fait.",
+    'op.bio.onyx': "Entre dans une fusillade et le combat ralentit. Ce n'est pas la peur — c'est SURGE.",
   },
   de: {
     'ix.pgOps': "OPERATOREN", 'ix.pgOpsHint': "Kader · Kits · Identität", 'ix.emWave': "WINKEN", 'ix.emNod': "NICKEN", 'ix.emHint': "ziehen zum Drehen",
@@ -5207,6 +5281,16 @@ const V161 = {
     'op.bio.specter': "Keine Akte. Kein Bildmaterial. Kein Zeuge, der es zugibt.",
     'op.bio.volt': "Störkriegsführung. Wo VOLT geht, stottern Servos und verschwimmen Radare.",
     'op.bio.herald': "Präsenz auf Kommandoebene. Trupps unter HERALD brechen nicht — sie sammeln sich.",
+    'eco.gift': "SCHENKEN",
+    'eco.giftPh': "CR-BETRAG",
+    'eco.giftSent': "Geschenk gesendet — der Beleg landet im Postfach deines Freundes",
+    'eco.recycle': "RECYCELN — zum Duplikat-Rückkaufskurs von 40 CR verkaufen",
+    'shop.featured': "HEUTE IM FOKUS: {n}",
+    'm.streakTitle': "SCORESTREAKS — Tippe auf einen Slot zum Wechseln",
+    'm.streakSlot': "SLOT {n}",
+    'op.bio.dusk': "Nacht-Aufklärungsspezialist. Bewegt sich zwischen den Laternen, nie unter ihnen.",
+    'op.bio.forge': "Quartiermeister-Blut. Wenn man es bauen, reparieren oder nachliefern kann — FORGE hat es längst getan.",
+    'op.bio.onyx': "Betritt ein Feuergefecht und der Kampf wird langsamer. Das ist keine Angst — das ist SURGE.",
   },
   ru: {
     'ix.pgOps': "ОПЕРАТОРЫ", 'ix.pgOpsHint': "состав · наборы · личность", 'ix.emWave': "ПОМАХАТЬ", 'ix.emNod': "КИВНУТЬ", 'ix.emHint': "потяните, чтобы вращать",
@@ -5222,6 +5306,16 @@ const V161 = {
     'op.bio.specter': "Ни досье. Ни записи. Ни свидетеля, который признает хоть что-то.",
     'op.bio.volt': "Война помех. Там, где проходит VOLT, сервоприводы сбоят, а радары слепнут.",
     'op.bio.herald': "Командирская харизма. Отряды под HERALD не ломаются — они сплачиваются.",
+    'eco.gift': "ПОДАРОК",
+    'eco.giftPh': "СУММА CR",
+    'eco.giftSent': "Подарок отправлен — квитанция придёт другу на почту",
+    'eco.recycle': "ПЕРЕРАБОТКА — продажа по дубликатному курсу 40 CR",
+    'shop.featured': "В ФОКУСЕ СЕГОДНЯ: {n}",
+    'm.streakTitle': "СЕРИИ УБИЙСТВ — нажмите на слот, чтобы переключить",
+    'm.streakSlot': "СЛОТ {n}",
+    'op.bio.dusk': "Специалист ночного разведывания. Движется между фонарями, никогда — под ними.",
+    'op.bio.forge': "Кровь интенданта. Если это можно построить, починить или подвезти — FORGE уже сделал.",
+    'op.bio.onyx': "Входит в перестрелку — и бой замедляется. Это не страх. Это SURGE.",
   },
   es: {
     'ix.pgOps': "OPERADORES", 'ix.pgOpsHint': "plantilla · kits · identidad", 'ix.emWave': "SALUDAR", 'ix.emNod': "ASENTIR", 'ix.emHint': "arrastra para girar",
@@ -5237,6 +5331,16 @@ const V161 = {
     'op.bio.specter': "Sin expediente. Sin grabación. Sin testigos que lo admitan.",
     'op.bio.volt': "Guerra de interferencias. Donde camina VOLT, los servos fallan y los radares se difuminan.",
     'op.bio.herald': "Presencia de mando. Los escuadrones bajo HERALD no se rompen — se reagrupan.",
+    'eco.gift': "REGALAR",
+    'eco.giftPh': "CANTIDAD CR",
+    'eco.giftSent': "Regalo enviado — el recibo llega al buzón de tu amigo",
+    'eco.recycle': "RECICLAR — vender al precio de duplicado de 40 CR",
+    'shop.featured': "DESTACADO DE HOY: {n}",
+    'm.streakTitle': "RACHAS — toca una ranura para cambiar",
+    'm.streakSlot': "RANURA {n}",
+    'op.bio.dusk': "Especialista en reconocimiento nocturno. Se mueve entre los faroles, nunca debajo.",
+    'op.bio.forge': "Sangre de intendente. Si se puede construir, reparar o reabastecer — FORGE ya lo hizo.",
+    'op.bio.onyx': "Entra a un tiroteo y la pelea se frena. No es miedo — es SURGE.",
   },
   pt: {
     'ix.pgOps': "OPERADORES", 'ix.pgOpsHint': "efetivo · kits · identidade", 'ix.emWave': "ACENAR", 'ix.emNod': "CONCORDAR", 'ix.emHint': "arraste para girar",
@@ -5252,6 +5356,16 @@ const V161 = {
     'op.bio.specter': "Sem dossiê. Sem gravação. Sem testemunha que admita.",
     'op.bio.volt': "Guerra eletrônica. Onde VOLT passa, servos engasgam e radares embaçam.",
     'op.bio.herald': "Presença de comando. Esquadrões sob HERALD não quebram — eles se reúnem.",
+    'eco.gift': "PRESENTEAR",
+    'eco.giftPh': "VALOR EM CR",
+    'eco.giftSent': "Presente enviado — o recibo chega na caixa do seu amigo",
+    'eco.recycle': "RECICLAR — vender pelo valor de duplicado de 40 CR",
+    'shop.featured': "DESTAQUE DE HOJE: {n}",
+    'm.streakTitle': "SEQUÊNCIAS — toque em um slot para alternar",
+    'm.streakSlot': "SLOT {n}",
+    'op.bio.dusk': "Especialista em recon noturno. Move-se entre os postes, nunca sob eles.",
+    'op.bio.forge': "Sangue de intendente. Se pode construir, consertar ou reabastecer — FORGE já fez.",
+    'op.bio.onyx': "Entra no tiroteio e a luta desacelera. Não é medo — é SURGE.",
   },
   nl: {
     'ix.pgOps': "OPERATORS", 'ix.pgOpsHint': "selectie · kits · identiteit", 'ix.emWave': "ZWAAIEN", 'ix.emNod': "KNIKKEN", 'ix.emHint': "sleep om te draaien",
@@ -5267,6 +5381,16 @@ const V161 = {
     'op.bio.specter': "Geen dossier. Geen beeld. Geen getuige die het toegeeft.",
     'op.bio.volt': "Storingsoorlog. Waar VOLT loopt, hikken servo's en vervagen radars.",
     'op.bio.herald': "Commando-aanwezigheid. Squads onder HERALD breken niet — ze hergroeperen.",
+    'eco.gift': "CADEAU",
+    'eco.giftPh': "CR-BEDRAG",
+    'eco.giftSent': "Cadeau verstuurd — het bonnetje landt in de inbox van je vriend",
+    'eco.recycle': "RECYCLEN — verkopen tegen het 40 CR-duplicaat tarief",
+    'shop.featured': "VANDAAG IN DE KIJKER: {n}",
+    'm.streakTitle': "SCORESTREAKS — tik op een slot om te wisselen",
+    'm.streakSlot': "SLOT {n}",
+    'op.bio.dusk': "Nacht-verkennningsspecialist. Beweegt tussen de lantaarns, nooit eronder.",
+    'op.bio.forge': "Kwartiermeestersbloed. Als het gebouwd, gerepareerd of aangevuld kan worden — FORGE deed het al.",
+    'op.bio.onyx': "Stapt een vuurgevecht in en het gevecht vertraagt. Dat is geen angst — dat is SURGE.",
   },
   ko: {
     'ix.pgOps': "오퍼레이터", 'ix.pgOpsHint': "로스터 · 키트 · 정체성", 'ix.emWave': "손흔들기", 'ix.emNod': "고개끄덕", 'ix.emHint': "드래그하여 회전",
@@ -5282,6 +5406,16 @@ const V161 = {
     'op.bio.specter': "인적서 없음. 영상 없음. 이를 인정하는 목격자도 없음.",
     'op.bio.volt': "교란전. VOLT가 지나가면 서보는 뚝 끊기고 레이더는 흐려집니다.",
     'op.bio.herald': "지휘관급 카리스마. HERALD 아래의 분대는 무너지지 않고 결집합니다.",
+    'eco.gift': "선물",
+    'eco.giftPh': "CR 금액",
+    'eco.giftSent': "선물 완료 — 영수증이 친구의 수신함에 도착합니다",
+    'eco.recycle': "분해 — 40 CR 중복 환수율로 판매",
+    'shop.featured': "오늘의 추천: {n}",
+    'm.streakTitle': "연속 보상 — 슬롯을 눌러 교체하세요",
+    'm.streakSlot': "슬롯 {n}",
+    'op.bio.dusk': "야간 정찰 전문가. 가로등 사이로 움직이지, 그 아래로는 움직이지 않는다.",
+    'op.bio.forge': "보급관의 혈통. 만들 수도, 고칠 수도, 보급할 수도 있다면 — FORGE는 이미 해냈다.",
+    'op.bio.onyx': "총격전에 걸어 들어가면 전투가 느려진다. 그건 두려움이 아니라 — SURGE다.",
   },
   zh: {
     'ix.pgOps': "干员", 'ix.pgOpsHint': "名册 · 配件 · 身份", 'ix.emWave': "挥手", 'ix.emNod': "点头", 'ix.emHint': "拖动旋转",
@@ -5297,6 +5431,16 @@ const V161 = {
     'op.bio.specter': "无档案。无影像。无愿意承认的目击者。",
     'op.bio.volt': "干扰战。VOLT 走过之处，伺服卡顿，雷达模糊。",
     'op.bio.herald': "指挥级气场。HERALD 麾下的小队不会溃散——只会集结。",
+    'eco.gift': "赠送",
+    'eco.giftPh': "CR 数额",
+    'eco.giftSent': "赠礼已发送——回执将送入好友的收件箱",
+    'eco.recycle': "回收——按 40 CR 的重复返还款率出售",
+    'shop.featured': "今日精选：{n}",
+    'm.streakTitle': "连杀奖励 — 点击槽位切换",
+    'm.streakSlot': "槽位 {n}",
+    'op.bio.dusk': "夜间侦察专家。在灯柱之间穿行，从不走在灯下。",
+    'op.bio.forge': "军需官血脉。能建造、能修理、能补给的东西——FORGE 早已完成。",
+    'op.bio.onyx': "他踏入交火，战局随之放缓。那不是恐惧——那是 SURGE。",
   },
 };
 for (const L of Object.keys(DICTS)) Object.assign(DICTS[L], V161[L] || V161.en); // full key set per locale; EN net stays
@@ -5841,8 +5985,8 @@ for (const L of Object.keys(DICTS)) Object.assign(DICTS[L], V167[L] || V167.en);
 // the v1.83 inline additions never re-counted; this note re-baselines the truth).
 const V169 = {
   en: {
-    'on.connecting': 'CONNECTING: {url}…',
-    'on.connectFail': 'Room service unreachable at {url} — start it locally, or pick DIRECT in SETTINGS → ONLINE.',
+    'on.connecting': 'Seeking nearby server...', // [T175] the dial-phase voice — the user's verbatim ask (the cold-start 502 window read as silence/dead-end)
+    'on.connectFail': 'No answer from {url} — the hub may be waking (free tiers sleep ~30-60s); press the button again to retry, or pick DIRECT in SETTINGS → ONLINE.', // [T175] the waking truth rides the fail face (the T167 voice, now on the queue path too)
     'on.retry': 'RETRY',
     'on.useHub': 'USE HF HUB',
     'on.hostHub': 'ONLINE needs the room service — a static page can’t host it. Free fix: run the hub on Render or your PC (docs/HUB_HOSTING.md), then paste the URL into CUSTOM.',
@@ -5851,8 +5995,8 @@ const V169 = {
     'on.rankPos': 'RANKED QUEUE: position {pos} — the match launches automatically.',
   },
   fr: {
-    'on.connecting': 'CONNEXION : {url}…',
-    'on.connectFail': 'Service de salon injoignable sur {url} — lancez-le en local, ou choisissez DIRECT dans RÉGLAGES → EN LIGNE.',
+    'on.connecting': 'Recherche d\'un serveur à proximité...', // [T175]
+    'on.connectFail': 'Aucune réponse de {url} — le hub se réveille peut-être (les offres gratuites dorment ~30-60 s) ; réappuyez pour réessayer, ou choisissez DIRECT dans RÉGLAGES → EN LIGNE.', // [T175]
     'on.retry': 'RÉESSAYER',
     'on.useHub': 'UTILISER LE HUB HF',
     'on.hostHub': 'ONLINE requiert le service de salons — une page statique ne peut pas l’héberger. Solution gratuite : lancez le hub sur Render ou votre PC (docs/HUB_HOSTING.md), puis collez l’URL dans CUSTOM.',
@@ -5861,8 +6005,8 @@ const V169 = {
     'on.rankPos': 'FILE CLASSÉE : position {pos} — le match démarre automatiquement.',
   },
   de: {
-    'on.connecting': 'VERBINDEN: {url}…',
-    'on.connectFail': 'Raumdienst unter {url} nicht erreichbar — starte ihn lokal, oder wähle DIRECT in EINSTELLUNGEN → ONLINE.',
+    'on.connecting': 'Suche einen Server in der Nähe...', // [T175]
+    'on.connectFail': 'Keine Antwort von {url} — der Hub wacht vielleicht auf (Free-Tiers schlafen ~30-60 s); zum Wiederholen erneut drücken, oder wähle DIRECT in EINSTELLUNGEN → ONLINE.', // [T175]
     'on.retry': 'ERNEUT VERSUCHEN',
     'on.useHub': 'HF-HUB NUTZEN',
     'on.hostHub': 'ONLINE braucht den Raumdienst — eine statische Seite kann ihn nicht hosten. Gratis-Fix: Hub auf Render oder dem PC starten (docs/HUB_HOSTING.md), dann die URL bei CUSTOM einfügen.',
@@ -5871,8 +6015,8 @@ const V169 = {
     'on.rankPos': 'RANGED-WARTESCHLANGE: Position {pos} — das Match startet automatisch.',
   },
   ru: {
-    'on.connecting': 'ПОДКЛЮЧЕНИЕ: {url}…',
-    'on.connectFail': 'Сервис комнат недоступен на {url} — запустите его локально или выберите DIRECT в НАСТРОЙКИ → ОНЛАЙН.',
+    'on.connecting': 'Поиск ближайшего сервера...', // [T175]
+    'on.connectFail': 'Нет ответа от {url} — хаб, возможно, просыпается (бесплатные тарифы спят ~30-60 с); нажмите ещё раз для повтора или выберите DIRECT в НАСТРОЙКИ → ОНЛАЙН.', // [T175]
     'on.retry': 'ПОВТОРИТЬ',
     'on.useHub': 'ЧЕРЕЗ HF-ХАБ',
     'on.hostHub': 'ONLINE нужен сервис комнат — статическая страница не может его разместить. Бесплатно: запустите хаб на Render или своём ПК (docs/HUB_HOSTING.md) и вставьте URL в CUSTOM.',
@@ -5881,8 +6025,8 @@ const V169 = {
     'on.rankPos': 'РЕЙТИНГ-ОЧЕРЕДЬ: позиция {pos} — матч запустится автоматически.',
   },
   es: {
-    'on.connecting': 'CONECTANDO: {url}…',
-    'on.connectFail': 'Servicio de salas inaccesible en {url} — inícialo localmente o elige DIRECT en AJUSTES → EN LÍNEA.',
+    'on.connecting': 'Buscando un servidor cercano...', // [T175]
+    'on.connectFail': 'Sin respuesta de {url} — el hub puede estar despertando (los niveles gratis duermen ~30-60 s); pulsa de nuevo para reintentar, o elige DIRECT en AJUSTES → EN LÍNEA.', // [T175]
     'on.retry': 'REINTENTAR',
     'on.useHub': 'USAR HUB HF',
     'on.hostHub': 'ONLINE necesita el servicio de salas — una página estática no puede alojarlo. Arreglo gratis: lanza el hub en Render o tu PC (docs/HUB_HOSTING.md) y pega la URL en CUSTOM.',
@@ -5891,8 +6035,8 @@ const V169 = {
     'on.rankPos': 'COLA CLASIFICADA: posición {pos} — la partida comienza automáticamente.',
   },
   pt: {
-    'on.connecting': 'CONECTANDO: {url}…',
-    'on.connectFail': 'Serviço de salas inacessível em {url} — inicie-o localmente ou escolha DIRECT em AJUSTES → ONLINE.',
+    'on.connecting': 'Procurando um servidor próximo...', // [T175]
+    'on.connectFail': 'Sem resposta de {url} — o hub pode estar acordando (planos grátis dormem ~30-60 s); pressione novamente para tentar, ou escolha DIRECT em AJUSTES → ONLINE.', // [T175]
     'on.retry': 'TENTAR NOVAMENTE',
     'on.useHub': 'USAR HUB HF',
     'on.hostHub': 'ONLINE precisa do serviço de salas — uma página estática não pode hospedá-lo. Correção grátis: rode o hub no Render ou no seu PC (docs/HUB_HOSTING.md) e cole a URL em CUSTOM.',
@@ -5901,8 +6045,8 @@ const V169 = {
     'on.rankPos': 'FILA RANQUEADA: posição {pos} — a partida começa automaticamente.',
   },
   nl: {
-    'on.connecting': 'VERBINDEN: {url}…',
-    'on.connectFail': 'Ruimdienst onbereikbaar op {url} — start hem lokaal, of kies DIRECT in INSTELLINGEN → ONLINE.',
+    'on.connecting': 'Zoeken naar een server dichtbij...', // [T175]
+    'on.connectFail': 'Geen antwoord van {url} — de hub wordt misschien wakker (gratis tiers slapen ~30-60 s); druk opnieuw om te herproberen, of kies DIRECT in INSTELLINGEN → ONLINE.', // [T175]
     'on.retry': 'OPNIEUW',
     'on.useHub': 'HF-HUB GEBRUIKEN',
     'on.hostHub': 'ONLINE heeft de kamerdienst nodig — een statische pagina kan hem niet hosten. Gratis fix: start de hub op Render of je pc (docs/HUB_HOSTING.md) en plak de URL bij CUSTOM.',
@@ -5911,8 +6055,8 @@ const V169 = {
     'on.rankPos': 'GERANKTE WACHTRIJ: positie {pos} — de wedstrijd start automatisch.',
   },
   ko: {
-    'on.connecting': '연결 중: {url}…',
-    'on.connectFail': '{url}에서 룸 서비스에 연결할 수 없습니다 — 로컬에서 실행하거나 설정 → 온라인에서 DIRECT를 선택하세요.',
+    'on.connecting': '가까운 서버를 찾는 중...', // [T175]
+    'on.connectFail': '{url}에서 응답이 없습니다 — 허브가 깨어나는 중일 수 있습니다(무료 티어는 약 30-60초 잠듭니다); 다시 눌러 재시도하거나 설정 → 온라인에서 DIRECT를 선택하세요.', // [T175]
     'on.retry': '재시도',
     'on.useHub': 'HF 허브 사용',
     'on.hostHub': 'ONLINE에는 룸 서비스가 필요합니다 — 정적 페이지에서는 호스팅할 수 없습니다. 무료 해결: Render나 내 PC에서 허브를 실행(docs/HUB_HOSTING.md)한 뒤 CUSTOM에 URL을 붙여넣으세요.',
@@ -5921,8 +6065,8 @@ const V169 = {
     'on.rankPos': '랭크 대기열: {pos}위 — 매치가 자동으로 시작됩니다.',
   },
   zh: {
-    'on.connecting': '连接中：{url}…',
-    'on.connectFail': '无法连接 {url} 上的房间服务 — 请在本地启动它，或在 设置 → 在线 中选择 DIRECT。',
+    'on.connecting': '正在寻找附近的服务器...', // [T175]
+    'on.connectFail': '{url} 无响应 — 中心可能正在唤醒(免费层会休眠约30-60秒)；请再次点击重试，或在 设置 → 在线 中选择 DIRECT。', // [T175]
     'on.retry': '重试',
     'on.useHub': '使用 HF HUB',
     'on.hostHub': 'ONLINE 需要房间服务 — 静态页面无法托管它。免费方案：在 Render 或本机运行 hub（docs/HUB_HOSTING.md），然后把 URL 粘贴到 CUSTOM。',
@@ -6362,39 +6506,39 @@ for (const L of Object.keys(DICTS)) Object.assign(DICTS[L], V172[L] || V172.en);
 // ============================================================
 const V173 = {
   en: {
-    'cr.prestige': 'PRESTIGE', 'cr.prGo': 'ENTER PRESTIGE', 'cr.prSure': 'SURE? ENTER PRESTIGE',
+    'cr.prestige': 'PRESTIGE', 'cr.prGo': 'ENTER PRESTIGE', 'cr.prSure': 'SURE? ENTER PRESTIGE', 'cr.prReg': "REGULAR PRESTIGE", 'cr.prClassic': "CLASSIC PRESTIGE (+50% CR · RP reset)",
     'cr.prAt': 'Prestige opens at LVL {n} — keep earning', 'cr.prDone': 'PRESTIGE {n} ENTERED — LEVEL RESET · +{cr} CR', 'cr.prErrLvl': 'Prestige needs LVL {n} — keep earning',
   },
   fr: {
-    'cr.prestige': 'PRESTIGE', 'cr.prGo': 'ENTRER EN PRESTIGE', 'cr.prSure': 'SÛR ? ENTRER EN PRESTIGE',
+    'cr.prestige': 'PRESTIGE', 'cr.prGo': 'ENTRER EN PRESTIGE', 'cr.prSure': 'SÛR ? ENTRER EN PRESTIGE', 'cr.prReg': "PRESTIGE RÉGULIER", 'cr.prClassic': "PRESTIGE CLASSIQUE (+50% CR · RP réinitialisé)",
     'cr.prAt': 'Le Prestige s’ouvre au NIV. {n} — continuez de gagner', 'cr.prDone': 'PRESTIGE {n} ENTRÉ — NIVEAU RÉINITIALISÉ · +{cr} CR', 'cr.prErrLvl': 'Le Prestige exige le NIV. {n} — continuez de gagner',
   },
   de: {
-    'cr.prestige': 'PRESTIGE', 'cr.prGo': 'PRESTIGE EINTRETEN', 'cr.prSure': 'SICHER? PRESTIGE EINTRETEN',
+    'cr.prestige': 'PRESTIGE', 'cr.prGo': 'PRESTIGE EINTRETEN', 'cr.prSure': 'SICHER? PRESTIGE EINTRETEN', 'cr.prReg': "REGULÄRES PRESTIGE", 'cr.prClassic': "KLASSISCHES PRESTIGE (+50% CR · RP-Reset)",
     'cr.prAt': 'Prestige ab Stufe {n} — verdiene weiter', 'cr.prDone': 'PRESTIGE {n} EINGETRETEN — STUFE ZURÜCKGESETZT · +{cr} CR', 'cr.prErrLvl': 'Prestige benötigt Stufe {n} — verdiene weiter',
   },
   ru: {
-    'cr.prestige': 'ПРЕСТИЖ', 'cr.prGo': 'ВОЙТИ В ПРЕСТИЖ', 'cr.prSure': 'ТОЧНО? ВОЙТИ В ПРЕСТИЖ',
+    'cr.prestige': 'ПРЕСТИЖ', 'cr.prGo': 'ВОЙТИ В ПРЕСТИЖ', 'cr.prSure': 'ТОЧНО? ВОЙТИ В ПРЕСТИЖ', 'cr.prReg': "ОБЫЧНЫЙ ПРЕСТИЖ", 'cr.prClassic': "КЛАССИЧЕСКИЙ ПРЕСТИЖ (+50% CR · сброс RP)",
     'cr.prAt': 'Престиж открывается с ур. {n} — продолжайте зарабатывать', 'cr.prDone': 'ПРЕСТИЖ {n} ВХОД — УРОВЕНЬ СБРОШЕН · +{cr} CR', 'cr.prErrLvl': 'Престижу нужен ур. {n} — продолжайте зарабатывать',
   },
   es: {
-    'cr.prestige': 'PRESTIGIO', 'cr.prGo': 'ENTRAR EN PRESTIGIO', 'cr.prSure': '¿SEGURO? ENTRAR EN PRESTIGIO',
+    'cr.prestige': 'PRESTIGIO', 'cr.prGo': 'ENTRAR EN PRESTIGIO', 'cr.prSure': '¿SEGURO? ENTRAR EN PRESTIGIO', 'cr.prReg': "PRESTIGIO REGULAR", 'cr.prClassic': "PRESTIGIO CLÁSICO (+50% CR · RP reiniciado)",
     'cr.prAt': 'El prestigio se abre en NIV. {n} — sigue ganando', 'cr.prDone': 'PRESTIGIO {n} ENTRADO — NIVEL REINICIADO · +{cr} CR', 'cr.prErrLvl': 'El prestigio requiere NIV. {n} — sigue ganando',
   },
   pt: {
-    'cr.prestige': 'PRESTÍGIO', 'cr.prGo': 'ENTRAR NO PRESTÍGIO', 'cr.prSure': 'CERTO? ENTRAR NO PRESTÍGIO',
+    'cr.prestige': 'PRESTÍGIO', 'cr.prGo': 'ENTRAR NO PRESTÍGIO', 'cr.prSure': 'CERTO? ENTRAR NO PRESTÍGIO', 'cr.prReg': "PRESTÍGIO REGULAR", 'cr.prClassic': "PRESTÍGIO CLÁSSICO (+50% CR · RP reiniciado)",
     'cr.prAt': 'O prestígio abre no NÍV. {n} — continue ganhando', 'cr.prDone': 'PRESTÍGIO {n} ENTRADO — NÍVEL REDEFINIDO · +{cr} CR', 'cr.prErrLvl': 'O prestígio exige NÍV. {n} — continue ganhando',
   },
   ko: {
-    'cr.prestige': '프레스티지', 'cr.prGo': '프레스티지 진입', 'cr.prSure': '확실합니까? 프레스티지 진입',
+    'cr.prestige': '프레스티지', 'cr.prGo': '프레스티지 진입', 'cr.prSure': '확실합니까? 프레스티지 진입', 'cr.prReg': "일반 프레스티지", 'cr.prClassic': "클래식 프레스티지 (+50% CR · RP 초기화)",
     'cr.prAt': '프레스티지는 레벨 {n}부터 개방 — 계속 획득하십시오', 'cr.prDone': '프레스티지 {n} 진입 — 레벨 초기화 · +{cr} CR', 'cr.prErrLvl': '프레스티지에 레벨 {n} 필요 — 계속 획득하십시오',
   },
   zh: {
-    'cr.prestige': '声望', 'cr.prGo': '进入声望', 'cr.prSure': '确定？进入声望',
+    'cr.prestige': '声望', 'cr.prGo': '进入声望', 'cr.prSure': '确定？进入声望', 'cr.prReg': "常规声望", 'cr.prClassic': "经典声望（+50% CR · RP重置）",
     'cr.prAt': '声望于 {n} 级开放 — 继续获取', 'cr.prDone': '声望 {n} 已进入 — 等级已重置 · +{cr} CR', 'cr.prErrLvl': '声望需要 {n} 级 — 继续获取',
   },
   nl: {
-    'cr.prestige': 'PRESTIGE', 'cr.prGo': 'PRESTIGE BETREDEN', 'cr.prSure': 'ZEKER? PRESTIGE BETREDEN',
+    'cr.prestige': 'PRESTIGE', 'cr.prGo': 'PRESTIGE BETREDEN', 'cr.prSure': 'ZEKER? PRESTIGE BETREDEN', 'cr.prReg': "NORMAAL PRESTIGE", 'cr.prClassic': "KLASSIEK PRESTIGE (+50% CR · RP-reset)",
     'cr.prAt': 'Prestige opent op LV. {n} — blijf verdienen', 'cr.prDone': 'PRESTIGE {n} BETREDEN — NIVEAU GERESET · +{cr} CR', 'cr.prErrLvl': 'Prestige vereist LV. {n} — blijf verdienen',
   },
 };
@@ -6440,3 +6584,58 @@ const V174 = {
   },
 };
 for (const L of Object.keys(DICTS)) Object.assign(DICTS[L], V174[L] || V174.en); // V174: the war layer joins — full key set per locale; EN net stays
+
+// ============================================================
+// [T152 E3] V175 — the GUNSMITH layer joins: the headline moves to the
+// 5-slot signature catalogs, the five MW slot families name themselves,
+// and the lock chip states its kill requirement ({n} = the weapon-ladder
+// threshold). Full key set per locale; EN fallback net stays.
+// ============================================================
+const V175 = {
+  en: {
+    'ix.lwAttach': 'ATTACHMENTS — 5 SLOTS · SIGNATURE CATALOGS [MW GUNSMITH]',
+    'm.attCatMuzzle': 'MUZZLE', 'm.attCatBarrel': 'BARREL', 'm.attCatMag': 'MAG', 'm.attCatGrip': 'GRIP', 'm.attCatStock': 'STOCK',
+    'm.attLock': 'UNLOCK — {n} KILLS (THIS WEAPON)',
+  },
+  fr: {
+    'ix.lwAttach': 'ACCESSOIRES — 5 SLOTS · CATALOGUES SIGNATURE [MW GUNSMITH]',
+    'm.attCatMuzzle': 'BOUCHE', 'm.attCatBarrel': 'CANON', 'm.attCatMag': 'CHARGEUR', 'm.attCatGrip': 'POIGNÉE', 'm.attCatStock': 'CROSSE',
+    'm.attLock': 'DÉBLOQUER — {n} ÉLIMINATIONS (CETTE ARME)',
+  },
+  de: {
+    'ix.lwAttach': 'AUFSÄTZE — 5 SLOTS · SIGNATUR-KATALOGE [MW GUNSMITH]',
+    'm.attCatMuzzle': 'MÜNDUNG', 'm.attCatBarrel': 'LAUF', 'm.attCatMag': 'MAGAZIN', 'm.attCatGrip': 'GRIFF', 'm.attCatStock': 'SCHÄFTEL',
+    'm.attLock': 'FREISCHALTEN — {n} ELIMINIERUNGEN (DIESE WAFFE)',
+  },
+  ru: {
+    'ix.lwAttach': 'МОДУЛИ — 5 СЛОТОВ · СИГНАТУРНЫЕ КАТАЛОГИ [MW GUNSMITH]',
+    'm.attCatMuzzle': 'ДУЛО', 'm.attCatBarrel': 'СТВОЛ', 'm.attCatMag': 'МАГАЗИН', 'm.attCatGrip': 'РУКОЯТКА', 'm.attCatStock': 'ПРИКЛАД',
+    'm.attLock': 'ОТКРЫТЬ — {n} УБИЙСТВ (ЭТОГО ОРУЖИЯ)',
+  },
+  es: {
+    'ix.lwAttach': 'ACCESORIOS — 5 SLOTS · CATÁLOGOS DE FIRMA [MW GUNSMITH]',
+    'm.attCatMuzzle': 'BOCA', 'm.attCatBarrel': 'CAÑÓN', 'm.attCatMag': 'CARGADOR', 'm.attCatGrip': 'EMPUÑADURA', 'm.attCatStock': 'CULATA',
+    'm.attLock': 'DESBLOQUEAR — {n} BAJAS (ESTA ARMA)',
+  },
+  pt: {
+    'ix.lwAttach': 'ANEXOS — 5 SLOTS · CATÁLOGOS DE ASSINATURA [MW GUNSMITH]',
+    'm.attCatMuzzle': 'BOCAL', 'm.attCatBarrel': 'CANO', 'm.attCatMag': 'PENTE', 'm.attCatGrip': 'EMPUNHADURA', 'm.attCatStock': 'CORONHA',
+    'm.attLock': 'DESBLOQUEAR — {n} ABATES (ESTA ARMA)',
+  },
+  nl: {
+    'ix.lwAttach': 'ACCESSOIRES — 5 SLOTS · SIGNATUURCATALOGI [MW GUNSMITH]',
+    'm.attCatMuzzle': 'MONDING', 'm.attCatBarrel': 'LOOP', 'm.attCatMag': 'MAGAZIJN', 'm.attCatGrip': 'GREP', 'm.attCatStock': 'KOLF',
+    'm.attLock': 'ONTGRENDELEN — {n} UITschakELINGEN (DIT WAPEN)',
+  },
+  ko: {
+    'ix.lwAttach': '부착물 — 5 슬롯 · 시그니처 카탈로그 [MW GUNSMITH]',
+    'm.attCatMuzzle': '총구', 'm.attCatBarrel': '총열', 'm.attCatMag': '탄창', 'm.attCatGrip': '그립', 'm.attCatStock': '개머리판',
+    'm.attLock': '해금 — {n} 처치 (이 무기)',
+  },
+  zh: {
+    'ix.lwAttach': '配件 — 5 槽位 · 专属改装目录 [MW GUNSMITH]',
+    'm.attCatMuzzle': '枪口', 'm.attCatBarrel': '枪管', 'm.attCatMag': '弹匣', 'm.attCatGrip': '握把', 'm.attCatStock': '枪托',
+    'm.attLock': '解锁 — 该武器击杀 {n} 次',
+  },
+};
+for (const L of Object.keys(DICTS)) Object.assign(DICTS[L], V175[L] || V175.en); // V175: the gunsmith layer joins — full key set per locale; EN net stays

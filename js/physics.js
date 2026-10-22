@@ -415,6 +415,7 @@ export function stepState(s, input, world, dt) {
     || (input.autoSprint && il > 0.6 && mi > 0.5 && !input.ads && !wantCrouch);
   const stimBoost = s.stimT > 0 ? 1.25 : 1;
   let target = P.walkSpeed * stimBoost;
+  if (s.juggT > 0) target *= (s.juggSpeed || 1); // [T161 R6] the juggernaut suit — slow, armored, deadly (the MW grammar; the suit clock decays in player.js)
   if (s.sprinting) target = P.walkSpeed * P.sprintMult * stimBoost;
   if (s.prone > 0.5) target = P.walkSpeed * P.proneMult; // [T121] (9) the crawl
   if (s.crouch > 0.5 && !s.slide.active) target = P.walkSpeed * P.crouchMult;
