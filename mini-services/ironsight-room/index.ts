@@ -54,7 +54,7 @@ const mg = await import(GAME_JS + '/metagame.js') // T102 (v1.67): the meta econ
 const ops = await import(GAME_JS + '/operators.js') // T108 N8 (v1.72): the operator roster joins the single-truth import set — operators.js imports nothing (pure module), loads under bun (the cosmetics.js precedent); drives join validation + eco operator pricing
 const tk = await import(GAME_JS + '/tokens.js') // [T110 T2-5] the token leg: packs + the TK_STAGES mirror + the checkout-TTL/hist-cap constants (tokens.js imports nothing — the zero-import law; the PSP integration point lives at the tkco/tkpack ops)
 const { stepState } = phys
-const { CFG, WEAPONS, FRAG, FLASH, ABILITIES, GG_LADDER, SND_BOMB, XP_AWARD, xpForLevel, lvlFromXp, RANKED_MODES, RANKED_MIN_PLAYERS, RP_AWARD, rpDelta, tierOf, seasonOf, softReset, RP_TIERS, RANKED_PLACEMENTS, MAX_LVL, PRESTIGE, PRESTIGE_CLASSIC, crDelta, statOwns, casePick, ECO_CLAIM, ECO_RARITY, ECO_DUPE_REFUND, ECO_CAPS, CLAN, isoWeekOf, Q_WIDEN, widenTiers, BP, BP_AWARD, RANK_REWARDS, bpOf, ATTACHMENTS, SIGNATURE } = cfg // [T152 FIX] ATTACHMENTS + SIGNATURE join the destructure — buildWdefs referenced ATTACHMENTS since T40 §24 WITHOUT importing it: an undeclared identifier, hidden by the ternary short-circuit (empty `at[wid]` arrays never call the filter callback), throwing ReferenceError on the FIRST join that declared a non-empty attachment array — the hub's own validator was a join-fatal landmine for 112 tasks. [T152 E3] SIGNATURE joins for the per-weapon catalogs. // [T161] RANKED_PLACEMENTS (the ×2 volatility window) + MAX_LVL/PRESTIGE/PRESTIGE_CLASSIC (the dual-path prestige op) join the single truth // HP_HILLS/SND_SITES imports DROPPED (config exports stay for offline client) — objectives are per-room (room.HILLS/room.SITES, §51.2); §53: economy/social/queue law joins the single-truth destructure // T1-1: mode constants are module exports (SS22); T44 §28: XP law is a config.js export (single truth point); T46 §30: ranked law joins it · T89 L6: BP_AWARD + RANK_REWARDS join the SAME single truth
+const { CFG, WEAPONS, FRAG, FLASH, ABILITIES, GG_LADDER, SND_BOMB, XP_AWARD, xpForLevel, lvlFromXp, RANKED_MODES, RANKED_MIN_PLAYERS, RP_AWARD, rpDelta, tierOf, seasonOf, softReset, RP_TIERS, RANKED_PLACEMENTS, MAX_LVL, PRESTIGE, PRESTIGE_CLASSIC, crDelta, statOwns, casePick, ECO_CLAIM, ECO_RARITY, ECO_DUPE_REFUND, ECO_CAPS, CLAN, isoWeekOf, Q_WIDEN, widenTiers, BP, BP_AWARD, RANK_REWARDS, bpOf, ATTACHMENTS, SIGNATURE, BR_LOOT } = cfg // [T152 FIX] ATTACHMENTS + SIGNATURE join the destructure — buildWdefs referenced ATTACHMENTS since T40 §24 WITHOUT importing it: an undeclared identifier, hidden by the ternary short-circuit (empty `at[wid]` arrays never call the filter callback), throwing ReferenceError on the FIRST join that declared a non-empty attachment array — the hub's own validator was a join-fatal landmine for 112 tasks. [T152 E3] SIGNATURE joins for the per-weapon catalogs. // [T161] RANKED_PLACEMENTS (the ×2 volatility window) + MAX_LVL/PRESTIGE/PRESTIGE_CLASSIC (the dual-path prestige op) join the single truth // HP_HILLS/SND_SITES imports DROPPED (config exports stay for offline client) — objectives are per-room (room.HILLS/room.SITES, §51.2); §53: economy/social/queue law joins the single-truth destructure // T1-1: mode constants are module exports (SS22); T44 §28: XP law is a config.js export (single truth point); T46 §30: ranked law joins it · T89 L6: BP_AWARD + RANK_REWARDS join the SAME single truth
 
 // --- T44 §28.3: cross-session career mirror (additive, pid-keyed) ---
 // Loaded lazily at boot; saved at match end + disconnect ONLY (atomic tmp+rename; zero per-tick IO).
@@ -115,8 +115,9 @@ if (!Object.keys(ACC.users).length) {
   const disc = assignDisc()
   ACC.users['admin'] = { name: 'ADMIN', pid, ph, made: Date.now(), disc }
   const rec = careerRec(pid, 'ADMIN'); rec.n = 'ADMIN'; rec.disc = disc
+  ecoRec(rec).cr = 987654 // [T168] the user's grant — the seeded pilot boots with the 987,654 CR wallet (code-not-state, same law as the seed itself: every fresh deploy credits it; the client's CR chip ui.js:573 reads eco.cr as server truth)
   CAREER_DIRTY = true; accPersist(); careerPersist()
-  console.log('[T166] first pilot seeded: ADMIN#' + disc)
+  console.log('[T166] first pilot seeded: ADMIN#' + disc + ' · [T168] eco.cr=987654')
 }
 function accPersist() {
   try {
@@ -139,6 +140,33 @@ function socialPersist() {
     renameSync(tmp, SOCIAL_PATH)
   } catch (e) { console.log('[social] persist failed: ' + (e && e.message)) }
 }
+// --- §55 [T173] PER-USER VARS STORE — bun:sqlite, INTEGER PRIMARY KEY (the rowid law) ---
+// The most efficient per-user variable home on this stack: an auto-rowid INT key (the
+// smallest/fastest key SQLite has — O(log n) B-tree point ops), pid TEXT UNIQUE as the
+// stable reverse map, ONE JSON blob column per user (the record-per-user law — never
+// per-variable rows at this scale), WAL journal for concurrent reads. Writes are
+// per-op and touch ONE row — the full-store-rewrite cost the JSON stores pay does
+// not exist here. Path env IRON_VARS (default ./vars.db — RUNTIME STATE, never ships:
+// clean-ship law, like accounts.json). Boot is guarded: a non-bun runtime degrades to
+// err('store') answers, never a crash (the honest-degradation law).
+const VARS_PATH = process.env.IRON_VARS || (import.meta.dir + '/vars.db')
+let VARS: any = null
+try {
+  const D = (await import('bun:sqlite')).Database
+  VARS = new D(VARS_PATH)
+  VARS.run('PRAGMA journal_mode = WAL')
+  VARS.run('CREATE TABLE IF NOT EXISTS vars (uid INTEGER PRIMARY KEY, pid TEXT NOT NULL UNIQUE, data TEXT NOT NULL, t INTEGER NOT NULL)')
+  console.log('[vars] store open: ' + VARS_PATH)
+} catch (e) { console.log('[vars] store degraded: ' + (e && e.message)) }
+const VARS_CAP_KEYS = 64, VARS_CAP_BYTES = 8192, VARS_KEY_LEN = 32, VARS_STR_LEN = 512, VARS_DEPTH = 4
+function varsGet(pid: string): any {
+  if (!VARS) return null
+  try { const r = VARS.query('SELECT data FROM vars WHERE pid = ?').get(pid); return r ? JSON.parse(r.data) : {} } catch (e) { return null }
+}
+function varsSet(pid: string, data: string): boolean {
+  if (!VARS) return false
+  try { VARS.run('INSERT INTO vars (pid, data, t) VALUES (?, ?, ?) ON CONFLICT(pid) DO UPDATE SET data = excluded.data, t = excluded.t', pid, data, Date.now()); return true } catch (e) { return false }
+}
 const SESSIONS = new Map() // tok -> { pid, name, exp } (sliding TTL; restart = re-login)
 const SESSION_TTL = 30 * 86400e3
 function newTok() { const b = new Uint8Array(32); crypto.getRandomValues(b); return [...b].map(x => x.toString(16).padStart(2, '0')).join('') }
@@ -160,7 +188,7 @@ function assignDisc(): string {
 // [T166] THE BIG-MAP POOL — the largest roster stages (60×44 half-extents, the 2.6k-tile
 // tier; area-ranked over all 35 map JSONs). The client's BIG MAP accordion queues with
 // big:true and the hub boots that bucket's world from here (see the q handler).
-const BIG_MAP_POOL = ['yard', 'windfarm', 'temple', 'stadium', 'solar']
+const BIG_MAP_POOL = ['voskhod', 'yard', 'windfarm', 'temple', 'stadium', 'solar'] // [T170] VOSKHOD joins — the 1.0 km2 battle map heads the bucket
 // §53.1: one-time device-career merge — a login absorbs the device pid's career record
 function mergeCareer(dst, src) {
   dst.k += src.k || 0; dst.d += src.d || 0; dst.m += src.m || 0; dst.w += src.w || 0
@@ -333,6 +361,7 @@ function buildRoomWorld(room, mapId) {
     room.DESTS.set(id, { hp: +x.hp, maxHp: +x.hp, box, center: { x: +x.p[0], y: +x.p[1] + hh / 2, z: +x.p[2] } })
   }
   room.WORLD = { colliders: [...d.colliders, ...destCols], jumpPads: d.jumpPads }
+  room.NAV = (d as any).nav || null // [T171] the nav graph rides the room — the BR loot scatter scatters on it (client parity: modes.js brStart uses World.waypoints)
   room.POOLS = { ffa: d.spawnsFFA, a: d.spawnsA || [], b: d.spawnsB || [] }
   room.UNION = [...room.POOLS.ffa, ...room.POOLS.a, ...room.POOLS.b]
   room.flags = (d.flags || []).map(f => ({ ...f, owner: -1, prog: 0 }))
@@ -623,7 +652,7 @@ function getRoom(id) {
       priv: false, code: null, // T45 §29.1: private lobby + join code (code IS the room id; set by the priv-create join path)
       match: { mode: 'ffa', state: 'idle', tLeft: 0, cd: 0, teamS: [0, 0], domS: [0, 0], domT: 0, endT: 0, winner: null, draw: false, reason: '',
         // T1-1 (SS22): objS = hp points / kc confirms / snd round wins; snd = round machine; tags live on the room
-        objS: [0, 0], snd: null, ggt: 0 },
+        objS: [0, 0], snd: null, ggt: 0, br: null as any },
       mapId: BOOT_MAP_ID, // §51.2: per-room world id (host-pickable via setMap)
       knobs: { sl: 0, tl: 0 }, // §52.4 S4: host rule knobs — 0 = mode default (undefined-drops on the wire)
       spawnIdx: 0,
@@ -633,6 +662,7 @@ function getRoom(id) {
       cap: { snaps: 0, bytes: 0, bytesMax: 0 }, // SS13
       // MP-3.1: T2-9/T2-10 world dynamism (server-owned)
       uavT: 0, strikes: [], bombs: [], crates: [], nades: [], burns: [], // [T155 R6] burns = the napalm DoT zones (the modes.js burnZones mirror)
+      loot: [] as any[], lootSeq: 0, // [T171] BR ground-loot manifest + id seq (the ev:'brLoot' wire carries it once; lootNew/lootTake deltas ride the match chain)
     }
     buildRoomWorld(r, BOOT_MAP_ID) // §51.2: per-room WORLD/POOLS/UNION/flags/HILLS/SITES
     rooms.set(id, r)
@@ -721,6 +751,17 @@ function killPlayer(room, victim, attacker, head, weaponName) {
   if (room.match.mode === 'ctl' && room.match.state === 'live' && typeof victim.ctlLives === 'number') {
     victim.ctlLives = Math.max(0, victim.ctlLives - 1)
     if (victim.ctlLives > 0) roomChain(room, 'match', { ev: 'mode', st: 'life', why: victim.name + ' DOWN — ' + victim.ctlLives + ' LIVES' })
+  }
+  // [T171] BR: the dead leave loot — ammo 70% + armor 25% at the corpse (the modes.js brDeathDrop mirror); the delta rides the match chain
+  if (room.match.mode === 'br' && room.match.state === 'live' && room.loot) {
+    const BRC = (CFG.MODES as any).br
+    const dropIt = (k: string) => {
+      const it = { id: 'L' + (++room.lootSeq), k, w: undefined as any, x: +(victim.st.pos.x + (Math.random() - 0.5) * 1.6).toFixed(2), z: +(victim.st.pos.z + (Math.random() - 0.5) * 1.6).toFixed(2), taken: false }
+      room.loot.push(it)
+      roomChain(room, 'match', { ev: 'lootNew', it: { id: it.id, k: it.k, w: it.w, x: it.x, z: it.z } })
+    }
+    if (Math.random() < BRC.deathDropCr) dropIt('ammo')
+    if (Math.random() < BRC.deathDropArm) dropIt('arm')
   }
   roomChain(room, 'kill', { k: kid, kn, v: victim.id, vn: victim.name, w: weaponName, h: !!head })
 }
@@ -1086,6 +1127,59 @@ function sndUpdate(room, dt) {
 }
 
 // --- match lifecycle (§12 MP-3) ---
+// --- [T171] BATTLE ROYALE server machine (modes.js mirror — MP combat stays server-owned) ---
+function brPick(room) { // next closure target inside the current circle (modes.js brPick mirror)
+  const br = room.match.br, next = (CFG.MODES as any).br.gas.phases[br.ph]
+  const marg = Math.max(0, (br.r - next.r) * 0.6)
+  const a = Math.random() * Math.PI * 2, d = Math.random() * marg
+  br.tx = br.cx + Math.cos(a) * d; br.tz = br.cz + Math.sin(a) * d; br.tr = next.r; br.dps = next.dps
+}
+function brUpdate(room, dt) { // wait→shrink phases + the gas DoT (flat dps outside the wall, 0.5 s ticks)
+  const m = room.match, br = m.br
+  if (!br) return
+  const PHS = (CFG.MODES as any).br.gas.phases
+  br.t -= dt
+  if (br.st === 'wait') {
+    if (br.t <= 0) { br.st = 'shrink'; br.t = PHS[br.ph].shrink; br.sr = br.r; br.scx = br.cx; br.scz = br.cz; roomChain(room, 'match', { ev: 'mode', st: 'gas', why: 'THE GAS CLOSES — ZONE ' + (br.ph + 1) }) }
+  } else {
+    const k = 1 - Math.max(0, br.t) / PHS[br.ph].shrink
+    br.r = br.sr + (br.tr - br.sr) * k; br.cx = br.scx + (br.tx - br.scx) * k; br.cz = br.scz + (br.tz - br.scz) * k
+    if (br.t <= 0) { br.r = br.tr; br.cx = br.tx; br.cz = br.tz; if (br.ph < PHS.length - 1) { br.ph++; br.st = 'wait'; br.t = PHS[br.ph].wait; brPick(room) } else br.t = 0 }
+  }
+  br.acc += dt
+  if (br.acc >= 0.5) {
+    const tick = br.acc; br.acc = 0
+    for (const p of room.players) {
+      if (!p.joined || !p.alive) continue
+      if (Math.hypot(p.st.pos.x - br.cx, p.st.pos.z - br.cz) <= br.r) continue
+      applyDamage(room, p, br.dps * tick, null, false, 'GAS', { x: p.st.pos.x, z: p.st.pos.z })
+    }
+  }
+}
+function brLoot(room) { // the ground-loot manifest — nav-node scatter, 18 m spacing (modes.js brStart mirror; kinds: wpn 42% / arm 20% / ammo 20% / hp 18%)
+  const br = (CFG.MODES as any).br, nodes = (room.NAV && room.NAV.nodes) || []
+  const loot: any[] = []
+  if (!nodes.length) return loot
+  const idx = nodes.map((_: any, i: number) => i)
+  for (let i = idx.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const t = idx[i]; idx[i] = idx[j]; idx[j] = t }
+  const pts: any[] = []
+  const scatter = (minGap: number) => {
+    for (const ni of idx) {
+      if (loot.length >= br.lootN) break
+      const n = nodes[ni]
+      const x = n[0], z = n[1]
+      if (pts.some((q: any) => Math.hypot(q.x - x, q.z - z) < minGap)) continue
+      pts.push({ x, z })
+      const roll = Math.random()
+      const k = roll < 0.42 ? 'wpn' : roll < 0.62 ? 'arm' : roll < 0.82 ? 'ammo' : 'hp'
+      loot.push({ id: 'L' + (++room.lootSeq), k, w: k === 'wpn' ? BR_LOOT[(Math.random() * BR_LOOT.length) | 0] : undefined, x: +(x + (Math.random() - 0.5) * 2).toFixed(2), z: +(z + (Math.random() - 0.5) * 2).toFixed(2), taken: false })
+    }
+  }
+  scatter(9) // pass 1: 9 m spacing (the modes.js brStart mirror)
+  scatter(2.5) // pass 2: top-up without spacing — clustered nav still fills the quota
+  return loot
+}
+
 function matchStart(room, mode, by) {
   if (!CFG.MODES[mode]) return false
   const m = room.match
@@ -1118,6 +1212,14 @@ function matchStart(room, mode, by) {
   if (mode === 'gf') { m.gf = { r: 1, side: 0, ph: 'pre', preT: CFG.MODES.gf.preRound, rt: 0, kit: null, swapped: false }; gfRoundStart(room) } // T89 L1
   if (mode === 'inf') { m.inf = { started: false, first: CFG.MODES.inf.first, pz: null } } // T89 L2: snapshot truth inf:{started:false, first:15, alive0:1}
   if (mode === 'ctl') { m.ctl = { r: 1, side: 0, ph: 'pre', preT: CFG.MODES.ctl.preRound, rt: 0, caps: 0, extraUsed: false, sites: [0, 1] }; ctlRoundStart(room) } // T89 L3: attackers = team 0, two zones
+  if (mode === 'br') { // [T171] BATTLE ROYALE boot — the gas machine + the ground-loot manifest + air-drop spawns
+    const G = (CFG.MODES as any).br.gas
+    m.br = { ph: 0, st: 'wait', t: G.phases[0].wait, cx: 0, cz: 0, r: G.r0, tx: 0, tz: 0, tr: G.phases[0].r, dps: G.phases[0].dps, acc: 0, sr: 0, scx: 0, scz: 0 }
+    brPick(room)
+    room.loot = brLoot(room)
+    roomChain(room, 'match', { ev: 'brLoot', loot: room.loot.map(it => ({ id: it.id, k: it.k, w: it.w, x: it.x, z: it.z })) })
+    ps.forEach((p) => { if (p.joined) { p.st.pos.y = (CFG.MODES as any).br.drop; p.dropT = 25; p.shield = 0 } }) // air-drop: 115 m up, glide-capped below, fall guard armed until landing
+  }
   roomChain(room, 'match', { ev: 'start', md: mode, by: by ? by.name : null })
   broadcastRoster(room) // teams may have re-balanced
   return true
@@ -1144,6 +1246,10 @@ function matchFinish(room, reason) {
   } else if (m.mode === 'inf') { // T89 L2: clock expiry = survivors win; all-converted = horde wins
     const survivors = ps.some(p => p.joined && p.alive && p.team === 0)
     m.winner = survivors ? 'TEAM-A' : 'TEAM-B'; m.draw = false
+  } else if (m.mode === 'br') { // [T171] LAST-ALIVE law — the survivor takes it (time expiry resolves the same way)
+    const alive = ps.filter(p => p.alive)
+    m.winner = alive.length === 1 ? alive[0].id : null
+    m.draw = false
   } else if (m.mode === 'gg') {
     const sorted = ps.slice().sort((a, b) => (b.gg || 0) - (a.gg || 0))
     m.winner = sorted[0] ? sorted[0].id : null
@@ -1252,6 +1358,7 @@ function matchUpdate(room, dt) {
   if (m.mode === 'gf') gfUpdate(room, dt)
   if (m.mode === 'inf') infUpdate(room, dt)
   if (m.mode === 'ctl') ctlUpdate(room, dt)
+  if (m.mode === 'br') brUpdate(room, dt) // [T171] the gas machine (server truth)
   const cm = CFG.MODES[m.mode]
   if (m.mode === 'ffa') {
     for (const p of room.players) if (p.kills >= (KLIMIT || room.knobs.sl || cm.killLimit)) { matchFinish(room, 'limit'); return }
@@ -1272,6 +1379,9 @@ function matchUpdate(room, dt) {
     if (m.inf && m.inf.started && ![...room.players].some(p => p.joined && p.alive && p.team === 0)) { matchFinish(room, 'limit'); return }
   } else if (m.mode === 'gg') {
     for (const p of room.players) if ((p.gg || 0) >= GG_TOTAL + 1) { matchFinish(room, 'limit'); return } // kill AT melee tier [e_14]
+  } else if (m.mode === 'br') { // [T171] the last-alive law — 1 combatant left standing resolves the round
+    const alive = [...room.players].filter(p => p.joined && p.alive)
+    if (m.state === 'live' && alive.length <= 1) { matchFinish(room, 'lastalive'); return }
   }
 }
 
@@ -1298,8 +1408,12 @@ function stepRoom(room, dt) {
     }
     if (p.alive) {
       const ev = stepState(p.st, inp || { ix: 0, iz: 0, sprint: false, ads: false, crouch: false, crouchEdge: false, jumpEdge: false, autoSprint: false }, room.WORLD, dt)
+      if (p.dropT > 0) { // [T171] BR insertion — glide-capped fall, landing/water disarms the guard (the player.js dropGlide mirror; a reservoir splash must not disable fall damage for the match)
+        p.st.vel.y = Math.max(p.st.vel.y, (CFG.MODES as any).br.dropFall)
+        if (ev.land || p.st.swimming || p.st.wading) p.dropT = 0
+      }
       // fall damage from the shared core's land events (§17) — player.js:67 formula verbatim
-      if (ev.land && ev.land.fall > P.fallDamageH) {
+      if (ev.land && ev.land.fall > P.fallDamageH && !(p.dropT > 0)) {
         const dmg = Math.min(P.fallDmgCap, (ev.land.fall - P.fallDamageH) * P.fallDmgPerM)
         applyDamage(room, p, dmg, null, false, 'GRAVITY', { x: p.st.pos.x, z: p.st.pos.z })
       }
@@ -1426,6 +1540,7 @@ function snapshot(room) {
       gf: m.mode === 'gf' && m.gf ? { r: m.gf.r, side: m.gf.side, ph: m.gf.ph, rt: Math.max(0, Math.ceil(m.gf.rt)), kit: m.gf.kit } : null,
       inf: m.mode === 'inf' && m.inf ? { started: m.inf.started, first: Math.max(0, Math.ceil(m.inf.first)) } : null,
       ctl: m.mode === 'ctl' && m.ctl ? { r: m.ctl.r, side: m.ctl.side, ph: m.ctl.ph, rt: Math.max(0, Math.ceil(m.ctl.rt)), caps: m.ctl.caps, sites: m.ctl.sites, zf: room.SITES.map(s => [s.ctlDone ? 1 : 0, +s.ctlProg.toFixed(2)]) } : null, // T98 re-land [Task 101 recovery]: per-site ctlDone — the DOM fl idiom ([state, prog] pairs); additive, old clients never read it
+      br: m.mode === 'br' && m.br ? { ph: m.br.ph, st: m.br.st, t: Math.max(0, Math.ceil(m.br.t)), cx: +m.br.cx.toFixed(1), cz: +m.br.cz.toFixed(1), r: +m.br.r.toFixed(1), tx: +m.br.tx.toFixed(1), tz: +m.br.tz.toFixed(1), tr: +m.br.tr.toFixed(1), al: [...room.players].filter(p => p.joined && p.alive).length } : null, // [T171] additive BR zone snapshot — old clients ignore unknown fields (wire law)
       lives: m.mode === 'ctl' ? Object.fromEntries([...room.players].filter(p => p.joined).map(p => [p.id, p.ctlLives ?? 0])) : null },
   }
 }
@@ -1527,13 +1642,14 @@ function rateOk(buckets, ev, cap, win = 1000, sCap, sWin) { // §50.2: optional 
 // or O(store) work): ping/status/lb/spong/reload/setMode — §51/§52 add setMap/setKnob, §53.6 adds auth/eco/soc/q.
 const PING_SUST = [60, 10000], STATUS_SUST = [15, 10000], LB_SUST = [15, 10000]
 const SPONG_SUST = [20, 10000], RELOAD_SUST = [12, 10000], SETMODE_SUST = [12, 10000]
-const SETMAP_SUST = [12, 10000], SETKNOB_SUST = [10, 10000]
+const SETMAP_SUST = [12, 10000], SETKNOB_SUST = [10, 10000], LOOT_SUST = [12, 10000] // [T171] the BR loot-pickup budget (6/s burst under the same sustain law)
 const AUTH_SUST = [10, 10000] // §53.6: auth brute-force budget
 const ECO_SUST = [30, 10000]
 const TK_SECRET = process.env.IRONSIGHT_TK_SECRET || 'ironsight-tk-dev-v1' // [T110] the PSP verifier seam — env-overridable for staging; MODULE scope (the nonce space is service-global, never per-connection)
 const TK_PENDING = new Map() // checkout nonce → { pid, pack, t } — single-use, TTL'd (tokens.js TK_CO_TTL) — module scope: a nonce issued on ANY socket is consumable exactly once, service-wide
 const SOC_SUST = [30, 10000]
 const Q_SUST = [20, 10000]
+const VARS_SUST = [10, 10000] // §55: the vars bag is O(1) row work — burst 4/s, sustained 10/10s (the setKnob shape)
 const AC_KICKS = { n: 0 } // §50.3: kick counter for CAP_ON status reporting (SS13 law)
 
 // --- wire protocol ---
@@ -1905,6 +2021,22 @@ io.on('connection', (socket) => {
     if (m.tl != null) room.knobs.tl = tl
     roomChain(room, 'match', { ev: 'lobbyKnobs', knobs: { ...room.knobs }, by: p.name })
     broadcastRoster(room)
+  })
+
+  // --- [T171] BR loot pickup — alive + range + not-taken; the shield effect rides server-side
+  // (armor), the weapon/ammo apply stays client inventory truth; lootTake broadcasts to ALL.
+  socket.on('loot', (m) => {
+    if (!p || !p.joined) return
+    const room = rooms.get(p.roomId)
+    if (!room || room.match.mode !== 'br' || room.match.state !== 'live') return
+    if (!p.alive) return
+    if (!rateOk(rl, 'loot', 6, 1000, LOOT_SUST[0], LOOT_SUST[1])) return
+    const it = (room.loot || []).find(x => x && x.id === (m && m.id))
+    if (!it || it.taken) return
+    if (Math.hypot(p.st.pos.x - it.x, p.st.pos.z - it.z) > 3) return
+    it.taken = true
+    if (it.k === 'arm') p.shield = Math.min(H.shieldMax, (p.shield || 0) + 50) // the armor plate's server-truth half
+    roomChain(room, 'match', { ev: 'lootTake', id: it.id })
   })
 
   // ============================================================
@@ -2304,6 +2436,62 @@ io.on('connection', (socket) => {
       e.cr = (e.cr | 0) + ECO_DUPE_REFUND
       CAREER_DIRTY = true; careerPersist()
       chain('eco', { op, id: item.id, cr: e.cr, own: { ...e.own } })
+      return
+    }
+    fail('op')
+  })
+
+  // ============================================================
+  // §55 [T173] G-11 PER-USER VARS — {op:'get'} → {op, vars:bag} · {op:'set', set:{k:v}}
+  // merges the patch (a null value DELETES the key) and answers the SERVER-TRUTH bag.
+  // Same trust laws as eco/soc: pid via session token or validated uuid (PID_OK); every
+  // field shape-checked (finite numbers, ≤512-char strings, booleans, plain objects /
+  // arrays depth ≤ 4, keys ≤ 32 chars); the bag is capped (≤64 keys, ≤8 KB serialized).
+  // Errs: pid|store|op|shape|key|val|size. Writes are immediate (sqlite WAL — ONE row
+  // per user, no full-store rewrite). A fresh pid reads {} WITHOUT creating a row
+  // (no write on read). Cross-session BY DESIGN: the bag survives reconnect + redeploy
+  // (mounted volume), the same class of truth as career — NOT session state.
+  // ============================================================
+  socket.on('vars', (d) => {
+    if (!rateOk(rl, 'vars', 4, 1000, VARS_SUST[0], VARS_SUST[1])) return // §50.2 + §55 budget
+    d = d || {}
+    const op = typeof d.op === 'string' ? d.op : ''
+    const fail = (err) => chain('vars', { op, err })
+    const acc = SESSIONS.get(d.tok || '')
+    const pid = acc ? acc.pid : (PID_OK(d.pid) ? d.pid : null)
+    if (!pid) { fail('pid'); return }
+    if (!VARS) { fail('store'); return }
+    if (op === 'get') {
+      const bag = varsGet(pid)
+      if (!bag) { fail('store'); return }
+      chain('vars', { op, vars: bag })
+      return
+    }
+    if (op === 'set') {
+      const patch = d.set
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) { fail('shape'); return }
+      const keys = Object.keys(patch)
+      if (!keys.length || keys.length > VARS_CAP_KEYS) { fail('key'); return }
+      const badKey = keys.find((k) => !k.length || k.length > VARS_KEY_LEN)
+      if (badKey) { fail('key'); return }
+      const bag = varsGet(pid)
+      if (!bag) { fail('store'); return }
+      const chk = (v: any, dep: number): boolean => { // the JSON-safe law
+        if (v === null) return true
+        if (typeof v === 'number') return Number.isFinite(v)
+        if (typeof v === 'string') return v.length <= VARS_STR_LEN
+        if (typeof v === 'boolean') return true
+        if (dep >= VARS_DEPTH || typeof v !== 'object') return false
+        if (Array.isArray(v)) return v.length <= VARS_CAP_KEYS && v.every((x) => chk(x, dep + 1))
+        const ks = Object.keys(v)
+        return ks.length <= VARS_CAP_KEYS && ks.every((k) => k.length <= VARS_KEY_LEN && chk(v[k], dep + 1))
+      }
+      for (const k of keys) if (!chk(patch[k], 0)) { fail('val'); return }
+      for (const k of keys) { if (patch[k] === null) delete bag[k]; else bag[k] = patch[k] }
+      const data = JSON.stringify(bag)
+      if (data.length > VARS_CAP_BYTES) { fail('size'); return } // PRE-persist cap: a rejected op mutates NOTHING (the fail = no-state-change law — the merge above is in-memory only)
+      if (!varsSet(pid, data)) { fail('store'); return }
+      chain('vars', { op, vars: bag })
       return
     }
     fail('op')
@@ -2739,7 +2927,7 @@ io.on('connection', (socket) => {
 })
 
 httpServer.listen(PORT, () => {
-  console.log(`[room] ironsight-room (authoritative, MP-3.1 residuals) running on port ${PORT} (path '/' | sim 60Hz self-correcting | snap 1/${SNAP_EVERY} | fold ${FOLD} | rewind ring ${HIST} | rooms+modes | nades+flash+streaks+abilities+srtt+host | fired-reveal | spectate §25 | private-lobbies §29 | ac §50 sustained+sanctions+origin | per-room worlds §51 | knobs §52 | accounts+eco+social+queue §53)`)
+  console.log(`[room] ironsight-room (authoritative, MP-3.1 residuals) running on port ${PORT} (path '/' | sim 60Hz self-correcting | snap 1/${SNAP_EVERY} | fold ${FOLD} | rewind ring ${HIST} | rooms+modes | nades+flash+streaks+abilities+srtt+host | fired-reveal | spectate §25 | private-lobbies §29 | ac §50 sustained+sanctions+origin | per-room worlds §51 | knobs §52 | accounts+eco+social+queue §53 | vars §55)`)
 })
 process.on('SIGTERM', () => { httpServer.close(() => process.exit(0)) })
 process.on('SIGINT', () => { httpServer.close(() => process.exit(0)) })
